@@ -1,0 +1,7184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>$MU Analysis Dashboard — FinRL</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
+  <style>
+    :root {
+      --bg:      #08090d;
+      --bg2:     #0e1018;
+      --bg3:     #141720;
+      --bg4:     #1a1e2e;
+      --border:  #1e2438;
+      --border2: #2a3350;
+      --text:    #e2e8f0;
+      --text2:   #7c8aa0;
+      --text3:   #3d4a60;
+      --green:   #10b981;
+      --red:     #f43f5e;
+      --blue:    #3b82f6;
+      --purple:  #8b5cf6;
+      --yellow:  #f59e0b;
+      --cyan:    #06b6d4;
+      --orange:  #f97316;
+      --mu:      #6366f1;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+    /* ── HEADER ── */
+    header {
+      background: linear-gradient(135deg, #0b0d14 0%, #10141f 100%);
+      border-bottom: 1px solid var(--border);
+      padding: 20px 36px;
+      display: flex; align-items: center; justify-content: space-between;
+      position: sticky; top: 0; z-index: 100;
+    }
+    .logo { display: flex; align-items: center; gap: 14px; }
+    .ticker-badge {
+      background: linear-gradient(135deg, var(--mu), #818cf8);
+      border-radius: 10px; padding: 10px 16px;
+      font-size: 22px; font-weight: 800; letter-spacing: 0.5px;
+      box-shadow: 0 0 30px rgba(99,102,241,0.5);
+    }
+    .logo-text h1 { font-size: 18px; font-weight: 700; }
+    .logo-text p  { font-size: 12px; color: var(--text2); margin-top: 2px; }
+
+    .price-display {
+      display: flex; align-items: center; gap: 20px;
+    }
+    .price-main {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 28px; font-weight: 700;
+      background: linear-gradient(90deg, #e2e8f0, #94a3b8);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    }
+    .header-chips { display: flex; gap: 8px; }
+    .chip {
+      padding: 5px 12px; border-radius: 20px; font-size: 11px; font-weight: 600;
+      border: 1px solid; display: flex; align-items: center; gap: 5px;
+    }
+    .chip-green  { color: var(--green);  border-color: rgba(16,185,129,.3); background: rgba(16,185,129,.08); }
+    .chip-red    { color: var(--red);    border-color: rgba(244,63,94,.3);  background: rgba(244,63,94,.08); }
+    .chip-yellow { color: var(--yellow); border-color: rgba(245,158,11,.3); background: rgba(245,158,11,.08); }
+    .chip-purple { color: var(--purple); border-color: rgba(139,92,246,.3); background: rgba(139,92,246,.08); }
+
+    /* ── LAYOUT ── */
+    main { max-width: 1500px; margin: 0 auto; padding: 28px 36px 60px; }
+
+    /* ── KPI ROW ── */
+    .kpi-row { display: grid; grid-template-columns: repeat(6, 1fr); gap: 14px; margin-bottom: 28px; }
+    .kpi-card {
+      background: var(--bg2); border: 1px solid var(--border);
+      border-radius: 14px; padding: 18px 16px;
+      position: relative; overflow: hidden; transition: transform .2s, border-color .2s;
+    }
+    .kpi-card:hover { transform: translateY(-2px); border-color: var(--border2); }
+    .kpi-card::after {
+      content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 2px;
+      background: var(--kpi-color, var(--mu));
+    }
+    .kpi-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .8px; color: var(--text2); margin-bottom: 10px; }
+    .kpi-value { font-family: 'JetBrains Mono', monospace; font-size: 22px; font-weight: 700; color: var(--kpi-color, var(--text)); }
+    .kpi-sub   { font-size: 11px; color: var(--text2); margin-top: 4px; }
+
+    /* ── SECTION ── */
+    .section { margin-bottom: 32px; }
+    .section-head { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
+    .section-head h2 { font-size: 16px; font-weight: 700; }
+    .section-head p  { font-size: 12px; color: var(--text2); }
+    .section-line    { flex: 1; height: 1px; background: var(--border); }
+
+    /* ── CHART CARDS ── */
+    .grid-2 { display: grid; grid-template-columns: 2fr 1fr; gap: 18px; }
+    .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+    .grid-2-eq { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+
+    .chart-card {
+      background: var(--bg2); border: 1px solid var(--border);
+      border-radius: 16px; padding: 22px;
+    }
+    .chart-card h3 { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+    .chart-card p  { font-size: 11px; color: var(--text2); margin-bottom: 16px; }
+    .chart-card.full { grid-column: 1 / -1; }
+
+    .chart-wrap-lg { height: 320px; position: relative; }
+    .chart-wrap-md { height: 220px; position: relative; }
+    .chart-wrap-sm { height: 160px; position: relative; }
+
+    /* ── SIGNAL BARS ── */
+    .signal-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+    .signal-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 14px; border-radius: 10px;
+      background: var(--bg3); border: 1px solid var(--border);
+    }
+    .signal-name { font-size: 12px; font-weight: 600; color: var(--text2); }
+    .signal-pill {
+      font-size: 11px; font-weight: 700; padding: 3px 10px;
+      border-radius: 20px; font-family: 'JetBrains Mono', monospace;
+    }
+    .pill-green  { background: rgba(16,185,129,.15); color: var(--green); border: 1px solid rgba(16,185,129,.3); }
+    .pill-red    { background: rgba(244,63,94,.15);  color: var(--red);   border: 1px solid rgba(244,63,94,.3);  }
+    .pill-yellow { background: rgba(245,158,11,.15); color: var(--yellow); border: 1px solid rgba(245,158,11,.3); }
+    .pill-gray   { background: rgba(124,138,160,.1); color: var(--text2); border: 1px solid var(--border); }
+
+    /* ── EARNINGS COUNTDOWN ── */
+    .earnings-card {
+      background: linear-gradient(135deg, rgba(99,102,241,.15) 0%, rgba(139,92,246,.08) 100%);
+      border: 1px solid rgba(99,102,241,.35);
+      border-radius: 16px; padding: 24px; text-align: center;
+      position: relative; overflow: hidden;
+    }
+    .earnings-card::before {
+      content: '📅'; font-size: 48px; position: absolute;
+      top: -10px; right: 20px; opacity: .15;
+    }
+    .earnings-days {
+      font-size: 52px; font-weight: 800; color: var(--mu);
+      font-family: 'JetBrains Mono', monospace;
+      line-height: 1; margin: 8px 0;
+    }
+    .earnings-label { font-size: 13px; color: var(--text2); }
+    .earnings-date  { font-size: 11px; color: var(--text3); margin-top: 6px; font-family: 'JetBrains Mono', monospace; }
+
+    /* ── OPTIONS CARD ── */
+    .options-card {
+      background: var(--bg2); border: 1px solid var(--border);
+      border-radius: 16px; padding: 22px;
+    }
+    .options-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 0; border-bottom: 1px solid var(--border);
+    }
+    .options-row:last-child { border-bottom: none; }
+    .options-key { font-size: 12px; color: var(--text2); }
+    .options-val { font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 600; }
+
+    /* ── STRATEGY SIGNAL ── */
+    .strategy-signal {
+      margin-top: 16px; padding: 14px 18px;
+      border-radius: 12px; text-align: center;
+      font-weight: 700; font-size: 14px;
+    }
+    .strategy-signal.buy    { background: rgba(16,185,129,.12); border: 1px solid rgba(16,185,129,.3); color: var(--green); }
+    .strategy-signal.sell   { background: rgba(244,63,94,.12);  border: 1px solid rgba(244,63,94,.3);  color: var(--red); }
+    .strategy-signal.hold   { background: rgba(245,158,11,.12); border: 1px solid rgba(245,158,11,.3); color: var(--yellow); }
+
+    /* ── WHEEL RESULTS ── */
+    .wheel-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 12px; }
+    .wheel-stat { background: var(--bg3); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
+    .wheel-stat .wl { font-size: 10px; color: var(--text2); text-transform: uppercase; letter-spacing: .6px; }
+    .wheel-stat .wv { font-family: 'JetBrains Mono', monospace; font-size: 16px; font-weight: 700; margin-top: 4px; }
+
+    /* ── FOOTER ── */
+    footer { text-align: center; padding: 20px; font-size: 11px; color: var(--text3); border-top: 1px solid var(--border); margin-top: 20px; }
+    footer a { color: var(--text2); text-decoration: none; }
+
+    @media (max-width: 1100px) {
+      .kpi-row { grid-template-columns: repeat(3, 1fr); }
+      .grid-2, .grid-3 { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 700px) {
+      main { padding: 16px; }
+      .kpi-row { grid-template-columns: repeat(2, 1fr); }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="ticker-badge">$MU</div>
+    <div class="logo-text">
+      <h1>Micron Technology Analysis</h1>
+      <p>FinRL · RTX 5070 Ti · Real-time signals from mu_options_analysis.py</p>
+    </div>
+  </div>
+  <div class="price-display">
+    <div class="price-main" id="spotPrice">Loading...</div>
+    <div class="header-chips">
+      <span class="chip chip-green" id="trendChip">▲ Above 200 SMA</span>
+      <span class="chip chip-yellow" id="volChip">⚡ High Vol Regime</span>
+      <span class="chip chip-purple" id="earningsChip">📅 Earnings Soon</span>
+    </div>
+  </div>
+</header>
+
+<main>
+
+  <!-- KPI ROW -->
+  <div class="kpi-row" id="kpiRow"></div>
+
+  <!-- PRICE + SIGNALS OVERVIEW -->
+  <div class="section">
+    <div class="section-head">
+      <h2>Price & Volatility</h2>
+      <p>410 trading days of MU data · Oct 2024 → Jun 2026</p>
+      <div class="section-line"></div>
+      <small style="color:var(--text3);font-size:11px;white-space:nowrap">Scroll to zoom · Drag to pan</small>
+    </div>
+
+    <div class="grid-2" style="margin-bottom:18px">
+      <div class="chart-card">
+        <h3>MU Price</h3>
+        <p>Closing price with 50 SMA and 200 SMA overlays · earnings months highlighted</p>
+        <div class="chart-wrap-lg"><canvas id="priceChart"></canvas></div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:18px">
+        <div class="earnings-card">
+          <div class="earnings-label">Next Earnings</div>
+          <div class="earnings-days" id="earningsDays">15</div>
+          <div class="earnings-label">days away</div>
+          <div class="earnings-date">June 24, 2026</div>
+          <div style="margin-top:16px;font-size:12px;color:var(--text2)">MU avg move: <strong style="color:var(--mu)">±12%</strong></div>
+        </div>
+        <div class="options-card">
+          <h3 style="font-size:14px;font-weight:600;margin-bottom:14px">Options Snapshot</h3>
+          <div class="options-row">
+            <span class="options-key">Spot</span>
+            <span class="options-val" id="optSpot">$935.89</span>
+          </div>
+          <div class="options-row">
+            <span class="options-key">Nearest expiry</span>
+            <span class="options-val">Jun 12, 2026</span>
+          </div>
+          <div class="options-row">
+            <span class="options-key">ATM Straddle</span>
+            <span class="options-val">$84.64 (9.0%)</span>
+          </div>
+          <div class="options-row">
+            <span class="options-key">Break-even move</span>
+            <span class="options-val">±9.0%</span>
+          </div>
+          <div class="options-row">
+            <span class="options-key">EPS est. high</span>
+            <span class="options-val">$23.00</span>
+          </div>
+          <div class="options-row">
+            <span class="options-key">EPS est. low</span>
+            <span class="options-val">$7.53</span>
+          </div>
+          <div class="strategy-signal buy">
+            🟢 BUY STRADDLE — Options underpricing MU!<br>
+            <span style="font-size:11px;font-weight:400;opacity:.8">9% implied vs 12% historical move = edge</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid-3">
+      <div class="chart-card">
+        <h3>RSI (14)</h3>
+        <p>Relative Strength Index · overbought >70, oversold <30</p>
+        <div class="chart-wrap-md"><canvas id="rsiChart"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <h3>Realized Volatility</h3>
+        <p>30-day and 90-day annualized realized vol</p>
+        <div class="chart-wrap-md"><canvas id="volChart"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <h3>Volume</h3>
+        <p>Daily trading volume with 20-day average</p>
+        <div class="chart-wrap-md"><canvas id="volumeChart"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SIGNALS -->
+  <div class="section">
+    <div class="section-head">
+      <h2>RL Agent Signals</h2>
+      <p>Current state of all features fed into the RL state space</p>
+      <div class="section-line"></div>
+    </div>
+
+    <div class="grid-2-eq">
+      <div>
+        <div class="signal-grid" id="signalGrid"></div>
+      </div>
+      <div class="chart-card">
+        <h3>Signal History</h3>
+        <p>Binary signals over time — above 50/200 SMA, high vol regime, earnings proximity</p>
+        <div class="chart-wrap-md"><canvas id="signalHistChart"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- BACKTEST COMPARISON & WHEEL -->
+  <div class="section">
+    <div class="section-head">
+      <h2>Strategy Comparison</h2>
+      <p>FinRL agents vs Buy-and-Hold vs Wheel (2025–2026 backtest period)</p>
+      <div class="section-line"></div>
+    </div>
+
+    <div class="grid-2-eq">
+      <div class="chart-card">
+        <h3>Agent Returns vs Benchmarks</h3>
+        <p>20k-step trained agents · Needs 1M+ steps for positive alpha</p>
+        <div class="chart-wrap-md"><canvas id="returnBarChart"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <h3>Wheel Strategy Backtest (2yr)</h3>
+        <p>Cash-secured puts + covered calls on 100 MU shares</p>
+        <div class="wheel-grid">
+          <div class="wheel-stat">
+            <div class="wl">Total Return</div>
+            <div class="wv" style="color:var(--green)">+55.0%</div>
+          </div>
+          <div class="wheel-stat">
+            <div class="wl">Buy & Hold</div>
+            <div class="wv" style="color:var(--mu)">+576.2%</div>
+          </div>
+          <div class="wheel-stat">
+            <div class="wl">Premium Collected</div>
+            <div class="wv">$31,368</div>
+          </div>
+          <div class="wheel-stat">
+            <div class="wl">Assignments</div>
+            <div class="wv">21</div>
+          </div>
+          <div class="wheel-stat" style="grid-column:1/-1">
+            <div class="wl">Final Portfolio Value</div>
+            <div class="wv" style="color:var(--green)">$155,013 (started $100K)</div>
+          </div>
+        </div>
+        <p style="margin-top:14px;font-size:11px;color:var(--text3)">Note: Wheel underperforms B&H because MU went from $64→$1079. Best used in sideways/bear markets or to lower cost basis.</p>
+      </div>
+  </div>
+
+  <!-- 20-STRATEGY COMPARISON STUDY -->
+  <div class="section">
+    <div class="section-head">
+      <h2>Comprehensive 20-Strategy Backtest Study</h2>
+      <p>1-Year comparative performance benchmark of 20 distinct strategies on MU & MUU (June 2025 – June 2026)</p>
+      <div class="section-line"></div>
+    </div>
+
+    <div class="grid-2" style="margin-bottom:18px">
+      <div class="chart-card">
+        <h3>Cumulative Returns Comparison</h3>
+        <p>Interactive chart showing selected strategy equity curves over the 1-year backtest period</p>
+        <div class="chart-wrap-lg"><canvas id="multiStrategyChart"></canvas></div>
+      </div>
+      
+      <div class="chart-card" style="display:flex;flex-direction:column;gap:14px">
+        <h3>Select Strategies to Plot</h3>
+        <p>Toggle checkboxes to compare different strategies on the line chart (maximum 6 at a time)</p>
+        <div style="overflow-y:auto;max-height:260px;display:flex;flex-direction:column;gap:6px" id="strategyToggles">
+          <!-- Dynamically populated checkboxes -->
+        </div>
+      </div>
+    </div>
+
+    <div class="chart-card full" style="margin-bottom:18px">
+      <h3>Strategy Leaderboard Matrix</h3>
+      <p>Click table headers to sort by Cumulative Return, Sharpe Ratio, Max Drawdown, and whether they beat B&H MU</p>
+      <div style="overflow-x:auto">
+        <style>
+          .lb-table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 12px; text-align: left; }
+          .lb-table th { padding: 12px 10px; border-bottom: 2px solid var(--border); color: var(--text2); font-weight: 600; cursor: pointer; user-select: none; transition: color 0.15s; }
+          .lb-table th:hover { color: var(--text); }
+          .lb-table td { padding: 12px 10px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+          .lb-table tbody tr { transition: background 0.15s; }
+          .lb-table tbody tr:hover { background: rgba(255,255,255,0.02); }
+        </style>
+        <table class="lb-table" id="leaderboardTable">
+          <thead>
+            <tr>
+              <th onclick="sortLeaderboard('key')">ID ⇅</th>
+              <th onclick="sortLeaderboard('name')">Strategy Name ⇅</th>
+              <th onclick="sortLeaderboard('type')">Type ⇅</th>
+              <th onclick="sortLeaderboard('return_pct')">Return % ⇅</th>
+              <th onclick="sortLeaderboard('sharpe')">Sharpe Ratio ⇅</th>
+              <th onclick="sortLeaderboard('max_dd')">Max Drawdown % ⇅</th>
+              <th onclick="sortLeaderboard('beat_bh')">Beat B&H MU? ⇅</th>
+            </tr>
+          </thead>
+          <tbody id="leaderboardBody">
+            <!-- Dynamically populated rows -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- HOW TO USE WITH RL -->
+  <div class="section">
+    <div class="section-head">
+      <h2>Run MU RL Agent</h2>
+      <div class="section-line"></div>
+    </div>
+    <div class="grid-3">
+      <div class="chart-card" style="border-color:rgba(99,102,241,.3)">
+        <h3 style="color:var(--mu)">Use Case 1: Single Stock</h3>
+        <p>Best starting point — trains SAC on MU alone</p>
+        <pre style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:12px;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--cyan);overflow-x:auto;margin-top:12px">python examples/mu_rl_trader.py</pre>
+        <p style="margin-top:10px">~30 min @ 500K steps on RTX 5070 Ti</p>
+      </div>
+      <div class="chart-card" style="border-color:rgba(16,185,129,.3)">
+        <h3 style="color:var(--green)">Use Case 2: Sector Basket</h3>
+        <p>MU + NVDA + AMD + INTC + SOXX rotation</p>
+        <pre style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:12px;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--cyan);overflow-x:auto;margin-top:12px">python examples/mu_sector_basket.py</pre>
+        <p style="margin-top:10px">~45 min @ 1M steps on RTX 5070 Ti</p>
+      </div>
+      <div class="chart-card" style="border-color:rgba(139,92,246,.3)">
+        <h3 style="color:var(--purple)">Use Case 5: Hybrid LSTM+RL</h3>
+        <p>LSTM price predictor feeds RL agent</p>
+        <pre style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:12px;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--cyan);overflow-x:auto;margin-top:12px">python examples/mu_hybrid_lstm_rl.py</pre>
+        <p style="margin-top:10px">~2 hrs total (LSTM + RL) on RTX 5070 Ti</p>
+      </div>
+    </div>
+    <div style="margin-top:16px;padding:14px 18px;background:var(--bg3);border:1px solid var(--border);border-radius:12px;font-size:12px;color:var(--text2)">
+      <strong style="color:var(--text)">📊 TensorBoard</strong> is already running at
+      <a href="http://localhost:6006" target="_blank" style="color:var(--mu);font-weight:600">http://localhost:6006</a>
+      — see DOW-30 training curves for all 5 agents. After running MU scripts, results appear at
+      <code style="background:var(--bg4);padding:2px 6px;border-radius:4px;font-size:11px">results/mu/</code> and
+      <code style="background:var(--bg4);padding:2px 6px;border-radius:4px;font-size:11px">results/mu_hybrid/</code>
+    </div>
+  </div>
+
+</main>
+
+<footer>
+  $MU · Micron Technology · FinRL · Stable Baselines3 · PyTorch 2.12 · CUDA 12.8 · RTX 5070 Ti (sm_120) ·
+  <a href="dashboard.html">Training Dashboard</a>
+</footer>
+
+<script>
+const REAL_DATA = [
+  {
+    "Date": "2024-10-17",
+    "close": 111.49,
+    "volume": 26584800,
+    "rv_30d": 59.22,
+    "rv_90d": 57.46,
+    "iv_premium": -59.02,
+    "above_50sma": 1,
+    "above_200sma": 0,
+    "golden_cross": 1,
+    "rsi": 58.11,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2024-10-18",
+    "close": 110.6,
+    "volume": 16700400,
+    "rv_30d": 58.1,
+    "rv_90d": 57.47,
+    "iv_premium": -57.9,
+    "above_50sma": 1,
+    "above_200sma": 0,
+    "golden_cross": 1,
+    "rsi": 64.13,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2024-10-21",
+    "close": 108.54,
+    "volume": 14829400,
+    "rv_30d": 58.58,
+    "rv_90d": 57.06,
+    "iv_premium": -58.39,
+    "above_50sma": 1,
+    "above_200sma": 0,
+    "golden_cross": 1,
+    "rsi": 67.78,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2024-10-22",
+    "close": 107.28,
+    "volume": 13758100,
+    "rv_30d": 58.87,
+    "rv_90d": 56.99,
+    "iv_premium": -58.67,
+    "above_50sma": 1,
+    "above_200sma": 0,
+    "golden_cross": 1,
+    "rsi": 65.93,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2024-10-23",
+    "close": 104.53,
+    "volume": 15174700,
+    "rv_30d": 58.64,
+    "rv_90d": 57.1,
+    "iv_premium": -58.44,
+    "above_50sma": 1,
+    "above_200sma": 0,
+    "golden_cross": 1,
+    "rsi": 56.89,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2024-10-24",
+    "close": 106.32,
+    "volume": 13206300,
+    "rv_30d": 57.24,
+    "rv_90d": 56.61,
+    "iv_premium": -57.04,
+    "above_50sma": 1,
+    "above_200sma": 0,
+    "golden_cross": 1,
+    "rsi": 58.92,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2024-10-25",
+    "close": 107.37,
+    "volume": 12265000,
+    "rv_30d": 56.07,
+    "rv_90d": 56.23,
+    "iv_premium": -55.87,
+    "above_50sma": 1,
+    "above_200sma": 0,
+    "golden_cross": 1,
+    "rsi": 59.26,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2024-10-28",
+    "close": 105.86,
+    "volume": 12381000,
+    "rv_30d": 54.36,
+    "rv_90d": 55.43,
+    "iv_premium": -54.17,
+    "above_50sma": 1,
+    "above_200sma": 0,
+    "golden_cross": 1,
+    "rsi": 57.1,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2024-10-29",
+    "close": 107.64,
+    "volume": 15164600,
+    "rv_30d": 54.35,
+    "rv_90d": 55.3,
+    "iv_premium": -54.15,
+    "above_50sma": 1,
+    "above_200sma": 0,
+    "golden_cross": 1,
+    "rsi": 61.12,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2024-10-30",
+    "close": 103.56,
+    "volume": 14321800,
+    "rv_30d": 55.53,
+    "rv_90d": 55.62,
+    "iv_premium": -55.34,
+    "above_50sma": 1,
+    "above_200sma": 0,
+    "golden_cross": 1,
+    "rsi": 48.08,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2024-10-31",
+    "close": 99.15,
+    "volume": 19830300,
+    "rv_30d": 57.1,
+    "rv_90d": 55.93,
+    "iv_premium": -56.9,
+    "above_50sma": 1,
+    "above_200sma": 0,
+    "golden_cross": 1,
+    "rsi": 39.94,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2024-11-01",
+    "close": 99.23,
+    "volume": 13623400,
+    "rv_30d": 56.95,
+    "rv_90d": 55.9,
+    "iv_premium": -56.75,
+    "above_50sma": 1,
+    "above_200sma": 0,
+    "golden_cross": 1,
+    "rsi": 37.55,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2024-11-04",
+    "close": 101.22,
+    "volume": 15765800,
+    "rv_30d": 56.65,
+    "rv_90d": 54.84,
+    "iv_premium": -56.45,
+    "above_50sma": 1,
+    "above_200sma": 0,
+    "golden_cross": 1,
+    "rsi": 46.48,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2024-11-05",
+    "close": 104.96,
+    "volume": 12071900,
+    "rv_30d": 57.48,
+    "rv_90d": 55.23,
+    "iv_premium": -57.28,
+    "above_50sma": 1,
+    "above_200sma": 0,
+    "golden_cross": 1,
+    "rsi": 44.57,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2024-11-06",
+    "close": 111.27,
+    "volume": 20304500,
+    "rv_30d": 59.58,
+    "rv_90d": 56.19,
+    "iv_premium": -59.38,
+    "above_50sma": 1,
+    "above_200sma": 0,
+    "golden_cross": 1,
+    "rsi": 50.52,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2024-11-07",
+    "close": 112.85,
+    "volume": 13569800,
+    "rv_30d": 42.01,
+    "rv_90d": 56.23,
+    "iv_premium": -41.82,
+    "above_50sma": 1,
+    "above_200sma": 0,
+    "golden_cross": 1,
+    "rsi": 53.91,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2024-11-08",
+    "close": 111.34,
+    "volume": 13045700,
+    "rv_30d": 41.68,
+    "rv_90d": 55.99,
+    "iv_premium": -41.49,
+    "above_50sma": 1,
+    "above_200sma": 0,
+    "golden_cross": 1,
+    "rsi": 54.8,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2024-11-11",
+    "close": 108.11,
+    "volume": 14479700,
+    "rv_30d": 41.24,
+    "rv_90d": 55.84,
+    "iv_premium": -41.04,
+    "above_50sma": 1,
+    "above_200sma": 0,
+    "golden_cross": 1,
+    "rsi": 51.97,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2024-11-12",
+    "close": 103.58,
+    "volume": 21859700,
+    "rv_30d": 41.98,
+    "rv_90d": 56.24,
+    "iv_premium": -41.79,
+    "above_50sma": 1,
+    "above_200sma": 0,
+    "golden_cross": 1,
+    "rsi": 49.6,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2024-11-13",
+    "close": 99.42,
+    "volume": 18416200,
+    "rv_30d": 43.67,
+    "rv_90d": 56.6,
+    "iv_premium": -43.47,
+    "above_50sma": 0,
+    "above_200sma": 0,
+    "golden_cross": 0,
+    "rsi": 42.04,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2024-11-14",
+    "close": 98.69,
+    "volume": 18459700,
+    "rv_30d": 43.34,
+    "rv_90d": 56.14,
+    "iv_premium": -43.14,
+    "above_50sma": 0,
+    "above_200sma": 0,
+    "golden_cross": 0,
+    "rsi": 39.68,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2024-11-15",
+    "close": 95.86,
+    "volume": 18518300,
+    "rv_30d": 44.07,
+    "rv_90d": 55.86,
+    "iv_premium": -43.87,
+    "above_50sma": 0,
+    "above_200sma": 0,
+    "golden_cross": 0,
+    "rsi": 38.2,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2024-11-18",
+    "close": 97.02,
+    "volume": 14236400,
+    "rv_30d": 44.17,
+    "rv_90d": 55.71,
+    "iv_premium": -43.97,
+    "above_50sma": 0,
+    "above_200sma": 0,
+    "golden_cross": 0,
+    "rsi": 37.44,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2024-11-19",
+    "close": 97.24,
+    "volume": 14160300,
+    "rv_30d": 44.18,
+    "rv_90d": 55.64,
+    "iv_premium": -43.98,
+    "above_50sma": 0,
+    "above_200sma": 0,
+    "golden_cross": 0,
+    "rsi": 41.91,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2024-11-20",
+    "close": 97.88,
+    "volume": 10490600,
+    "rv_30d": 44.18,
+    "rv_90d": 55.52,
+    "iv_premium": -43.98,
+    "above_50sma": 0,
+    "above_200sma": 0,
+    "golden_cross": 0,
+    "rsi": 48.81,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2024-11-21",
+    "close": 102.25,
+    "volume": 18915200,
+    "rv_30d": 44.63,
+    "rv_90d": 55.12,
+    "iv_premium": -44.43,
+    "above_50sma": 1,
+    "above_200sma": 0,
+    "golden_cross": 1,
+    "rsi": 55.09,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2024-11-22",
+    "close": 102.13,
+    "volume": 12063700,
+    "rv_30d": 44.48,
+    "rv_90d": 55.05,
+    "iv_premium": -44.28,
+    "above_50sma": 1,
+    "above_200sma": 0,
+    "golden_cross": 1,
+    "rsi": 52.24,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2024-11-25",
+    "close": 103.96,
+    "volume": 22837900,
+    "rv_30d": 44.63,
+    "rv_90d": 54.96,
+    "iv_premium": -44.43,
+    "above_50sma": 1,
+    "above_200sma": 0,
+    "golden_cross": 1,
+    "rsi": 49.39,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2024-11-26",
+    "close": 101.29,
+    "volume": 19275700,
+    "rv_30d": 43.94,
+    "rv_90d": 55.1,
+    "iv_premium": -43.74,
+    "above_50sma": 0,
+    "above_200sma": 0,
+    "golden_cross": 0,
+    "rsi": 34.27,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2024-11-27",
+    "close": 97.71,
+    "volume": 17046400,
+    "rv_30d": 42.66,
+    "rv_90d": 55.39,
+    "iv_premium": -42.46,
+    "above_50sma": 0,
+    "above_200sma": 0,
+    "golden_cross": 0,
+    "rsi": 27.28,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2024-11-29",
+    "close": 97.46,
+    "volume": 13729400,
+    "rv_30d": 41.77,
+    "rv_90d": 55.09,
+    "iv_premium": -41.57,
+    "above_50sma": 0,
+    "above_200sma": 0,
+    "golden_cross": 0,
+    "rsi": 28.27,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2024-12-02",
+    "close": 98.06,
+    "volume": 16525600,
+    "rv_30d": 41.86,
+    "rv_90d": 54.94,
+    "iv_premium": -41.66,
+    "above_50sma": 0,
+    "above_200sma": 0,
+    "golden_cross": 0,
+    "rsi": 32.9,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2024-12-03",
+    "close": 99.34,
+    "volume": 23479700,
+    "rv_30d": 41.88,
+    "rv_90d": 54.9,
+    "iv_premium": -41.69,
+    "above_50sma": 0,
+    "above_200sma": 0,
+    "golden_cross": 0,
+    "rsi": 42.16,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2024-12-04",
+    "close": 102.69,
+    "volume": 16306200,
+    "rv_30d": 43.08,
+    "rv_90d": 55.14,
+    "iv_premium": -42.88,
+    "above_50sma": 0,
+    "above_200sma": 0,
+    "golden_cross": 0,
+    "rsi": 57.51,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2024-12-05",
+    "close": 100.37,
+    "volume": 13448900,
+    "rv_30d": 42.93,
+    "rv_90d": 54.65,
+    "iv_premium": -42.73,
+    "above_50sma": 0,
+    "above_200sma": 0,
+    "golden_cross": 0,
+    "rsi": 54.05,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2024-12-06",
+    "close": 100.67,
+    "volume": 12381000,
+    "rv_30d": 42.61,
+    "rv_90d": 53.34,
+    "iv_premium": -42.41,
+    "above_50sma": 0,
+    "above_200sma": 0,
+    "golden_cross": 0,
+    "rsi": 61.48,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2024-12-09",
+    "close": 102.31,
+    "volume": 14141900,
+    "rv_30d": 42.79,
+    "rv_90d": 51.86,
+    "iv_premium": -42.6,
+    "above_50sma": 0,
+    "above_200sma": 0,
+    "golden_cross": 0,
+    "rsi": 62.18,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2024-12-10",
+    "close": 97.61,
+    "volume": 23548500,
+    "rv_30d": 44.58,
+    "rv_90d": 50.34,
+    "iv_premium": -44.38,
+    "above_50sma": 0,
+    "above_200sma": 0,
+    "golden_cross": 0,
+    "rsi": 51.47,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2024-12-11",
+    "close": 101.55,
+    "volume": 15248400,
+    "rv_30d": 45.96,
+    "rv_90d": 50.57,
+    "iv_premium": -45.76,
+    "above_50sma": 0,
+    "above_200sma": 0,
+    "golden_cross": 0,
+    "rsi": 56.79,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2024-12-12",
+    "close": 97.75,
+    "volume": 19334900,
+    "rv_30d": 45.93,
+    "rv_90d": 50.92,
+    "iv_premium": -45.73,
+    "above_50sma": 0,
+    "above_200sma": 0,
+    "golden_cross": 0,
+    "rsi": 43.33,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2024-12-13",
+    "close": 101.99,
+    "volume": 23926000,
+    "rv_30d": 46.01,
+    "rv_90d": 51.19,
+    "iv_premium": -45.81,
+    "above_50sma": 0,
+    "above_200sma": 0,
+    "golden_cross": 0,
+    "rsi": 50.63,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2024-12-16",
+    "close": 107.72,
+    "volume": 42741200,
+    "rv_30d": 48.67,
+    "rv_90d": 51.05,
+    "iv_premium": -48.48,
+    "above_50sma": 1,
+    "above_200sma": 0,
+    "golden_cross": 1,
+    "rsi": 55.58,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2024-12-17",
+    "close": 108.06,
+    "volume": 35811500,
+    "rv_30d": 48.41,
+    "rv_90d": 51.03,
+    "iv_premium": -48.21,
+    "above_50sma": 1,
+    "above_200sma": 0,
+    "golden_cross": 1,
+    "rsi": 59.94,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2024-12-18",
+    "close": 103.38,
+    "volume": 63024300,
+    "rv_30d": 49.05,
+    "rv_90d": 51.53,
+    "iv_premium": -48.85,
+    "above_50sma": 0,
+    "above_200sma": 0,
+    "golden_cross": 0,
+    "rsi": 58.65,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2024-12-19",
+    "close": 86.66,
+    "volume": 91396800,
+    "rv_30d": 64.98,
+    "rv_90d": 58.12,
+    "iv_premium": -64.78,
+    "above_50sma": 0,
+    "above_200sma": 0,
+    "golden_cross": 0,
+    "rsi": 40.9,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2024-12-20",
+    "close": 89.67,
+    "volume": 49578400,
+    "rv_30d": 65.84,
+    "rv_90d": 58.19,
+    "iv_premium": -65.65,
+    "above_50sma": 0,
+    "above_200sma": 0,
+    "golden_cross": 0,
+    "rsi": 43.95,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 1
+  },
+  {
+    "Date": "2024-12-23",
+    "close": 89.27,
+    "volume": 26041500,
+    "rv_30d": 65.82,
+    "rv_90d": 57.12,
+    "iv_premium": -65.62,
+    "above_50sma": 0,
+    "above_200sma": 0,
+    "golden_cross": 0,
+    "rsi": 42.25,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 1
+  },
+  {
+    "Date": "2024-12-24",
+    "close": 88.84,
+    "volume": 13021300,
+    "rv_30d": 65.47,
+    "rv_90d": 57.09,
+    "iv_premium": -65.27,
+    "above_50sma": 0,
+    "above_200sma": 0,
+    "golden_cross": 0,
+    "rsi": 38.1,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 1
+  },
+  {
+    "Date": "2024-12-26",
+    "close": 89.37,
+    "volume": 14468200,
+    "rv_30d": 64.63,
+    "rv_90d": 57.09,
+    "iv_premium": -64.43,
+    "above_50sma": 0,
+    "above_200sma": 0,
+    "golden_cross": 0,
+    "rsi": 40.56,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 1
+  },
+  {
+    "Date": "2024-12-27",
+    "close": 88.19,
+    "volume": 19422600,
+    "rv_30d": 63.79,
+    "rv_90d": 57.12,
+    "iv_premium": -63.59,
+    "above_50sma": 0,
+    "above_200sma": 0,
+    "golden_cross": 0,
+    "rsi": 39.16,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 1
+  },
+  {
+    "Date": "2024-12-30",
+    "close": 85.0,
+    "volume": 22022900,
+    "rv_30d": 64.5,
+    "rv_90d": 57.41,
+    "iv_premium": -64.3,
+    "above_50sma": 0,
+    "above_200sma": 0,
+    "golden_cross": 0,
+    "rsi": 34.63,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 1
+  },
+  {
+    "Date": "2024-12-31",
+    "close": 83.85,
+    "volume": 18691500,
+    "rv_30d": 64.15,
+    "rv_90d": 57.13,
+    "iv_premium": -63.95,
+    "above_50sma": 0,
+    "above_200sma": 0,
+    "golden_cross": 0,
+    "rsi": 36.88,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 1
+  },
+  {
+    "Date": "2025-01-02",
+    "close": 87.01,
+    "volume": 18860000,
+    "rv_30d": 65.11,
+    "rv_90d": 57.47,
+    "iv_premium": -64.91,
+    "above_50sma": 0,
+    "above_200sma": 0,
+    "golden_cross": 0,
+    "rsi": 36.53,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-01-03",
+    "close": 89.54,
+    "volume": 17484600,
+    "rv_30d": 65.75,
+    "rv_90d": 57.34,
+    "iv_premium": -65.56,
+    "above_50sma": 0,
+    "above_200sma": 0,
+    "golden_cross": 0,
+    "rsi": 43.12,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-01-06",
+    "close": 98.89,
+    "volume": 42903300,
+    "rv_30d": 72.61,
+    "rv_90d": 59.93,
+    "iv_premium": -72.41,
+    "above_50sma": 0,
+    "above_200sma": 0,
+    "golden_cross": 0,
+    "rsi": 49.46,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-01-07",
+    "close": 101.53,
+    "volume": 53570000,
+    "rv_30d": 71.86,
+    "rv_90d": 59.85,
+    "iv_premium": -71.67,
+    "above_50sma": 1,
+    "above_200sma": 0,
+    "golden_cross": 1,
+    "rsi": 46.59,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-01-08",
+    "close": 99.04,
+    "volume": 33516900,
+    "rv_30d": 72.24,
+    "rv_90d": 60.0,
+    "iv_premium": -72.04,
+    "above_50sma": 0,
+    "above_200sma": 0,
+    "golden_cross": 0,
+    "rsi": 44.16,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-01-10",
+    "close": 98.97,
+    "volume": 20512600,
+    "rv_30d": 72.04,
+    "rv_90d": 59.99,
+    "iv_premium": -71.84,
+    "above_50sma": 0,
+    "above_200sma": 0,
+    "golden_cross": 0,
+    "rsi": 47.94,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-01-13",
+    "close": 94.71,
+    "volume": 22699100,
+    "rv_30d": 72.74,
+    "rv_90d": 58.9,
+    "iv_premium": -72.54,
+    "above_50sma": 0,
+    "above_200sma": 0,
+    "golden_cross": 0,
+    "rsi": 62.94,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-01-14",
+    "close": 97.0,
+    "volume": 18613400,
+    "rv_30d": 72.35,
+    "rv_90d": 59.01,
+    "iv_premium": -72.16,
+    "above_50sma": 0,
+    "above_200sma": 0,
+    "golden_cross": 0,
+    "rsi": 61.87,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-01-15",
+    "close": 102.81,
+    "volume": 27568100,
+    "rv_30d": 74.34,
+    "rv_90d": 59.81,
+    "iv_premium": -74.14,
+    "above_50sma": 1,
+    "above_200sma": 0,
+    "golden_cross": 1,
+    "rsi": 67.9,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-01-16",
+    "close": 102.22,
+    "volume": 16243800,
+    "rv_30d": 74.37,
+    "rv_90d": 59.52,
+    "iv_premium": -74.18,
+    "above_50sma": 1,
+    "above_200sma": 0,
+    "golden_cross": 1,
+    "rsi": 67.77,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-01-17",
+    "close": 105.36,
+    "volume": 18908900,
+    "rv_30d": 74.76,
+    "rv_90d": 59.7,
+    "iv_premium": -74.57,
+    "above_50sma": 1,
+    "above_200sma": 0,
+    "golden_cross": 1,
+    "rsi": 69.54,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-01-21",
+    "close": 108.98,
+    "volume": 23533600,
+    "rv_30d": 74.79,
+    "rv_90d": 59.92,
+    "iv_premium": -74.59,
+    "above_50sma": 1,
+    "above_200sma": 0,
+    "golden_cross": 1,
+    "rsi": 73.72,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-01-22",
+    "close": 108.83,
+    "volume": 20004300,
+    "rv_30d": 74.41,
+    "rv_90d": 59.54,
+    "iv_premium": -74.21,
+    "above_50sma": 1,
+    "above_200sma": 0,
+    "golden_cross": 1,
+    "rsi": 79.61,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-01-23",
+    "close": 104.45,
+    "volume": 22677600,
+    "rv_30d": 75.49,
+    "rv_90d": 59.58,
+    "iv_premium": -75.3,
+    "above_50sma": 1,
+    "above_200sma": 0,
+    "golden_cross": 1,
+    "rsi": 75.01,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-01-24",
+    "close": 102.81,
+    "volume": 19743800,
+    "rv_30d": 75.55,
+    "rv_90d": 59.21,
+    "iv_premium": -75.35,
+    "above_50sma": 1,
+    "above_200sma": 0,
+    "golden_cross": 1,
+    "rsi": 70.2,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-01-27",
+    "close": 90.77,
+    "volume": 50696200,
+    "rv_30d": 81.96,
+    "rv_90d": 62.01,
+    "iv_premium": -81.76,
+    "above_50sma": 0,
+    "above_200sma": 0,
+    "golden_cross": 0,
+    "rsi": 53.02,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-01-28",
+    "close": 87.92,
+    "volume": 34793600,
+    "rv_30d": 81.44,
+    "rv_90d": 62.18,
+    "iv_premium": -81.25,
+    "above_50sma": 0,
+    "above_200sma": 0,
+    "golden_cross": 0,
+    "rsi": 38.59,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-01-29",
+    "close": 88.68,
+    "volume": 25342800,
+    "rv_30d": 80.86,
+    "rv_90d": 62.14,
+    "iv_premium": -80.67,
+    "above_50sma": 0,
+    "above_200sma": 0,
+    "golden_cross": 0,
+    "rsi": 36.05,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-01-30",
+    "close": 92.16,
+    "volume": 22497100,
+    "rv_30d": 80.67,
+    "rv_90d": 62.37,
+    "iv_premium": -80.47,
+    "above_50sma": 0,
+    "above_200sma": 0,
+    "golden_cross": 0,
+    "rsi": 43.55,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-01-31",
+    "close": 90.9,
+    "volume": 20492100,
+    "rv_30d": 78.81,
+    "rv_90d": 62.35,
+    "iv_premium": -78.61,
+    "above_50sma": 0,
+    "above_200sma": 0,
+    "golden_cross": 0,
+    "rsi": 42.34,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-02-03",
+    "close": 89.59,
+    "volume": 18607900,
+    "rv_30d": 78.82,
+    "rv_90d": 62.21,
+    "iv_premium": -78.63,
+    "above_50sma": 0,
+    "above_200sma": 0,
+    "golden_cross": 0,
+    "rsi": 45.12,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-02-04",
+    "close": 90.33,
+    "volume": 12827500,
+    "rv_30d": 78.06,
+    "rv_90d": 62.22,
+    "iv_premium": -77.86,
+    "above_50sma": 0,
+    "above_200sma": 0,
+    "golden_cross": 0,
+    "rsi": 43.03,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-02-05",
+    "close": 93.26,
+    "volume": 15660000,
+    "rv_30d": 62.54,
+    "rv_90d": 62.38,
+    "iv_premium": -62.34,
+    "above_50sma": 0,
+    "above_200sma": 0,
+    "golden_cross": 0,
+    "rsi": 39.05,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-02-06",
+    "close": 94.19,
+    "volume": 16141100,
+    "rv_30d": 61.86,
+    "rv_90d": 57.25,
+    "iv_premium": -61.66,
+    "above_50sma": 0,
+    "above_200sma": 0,
+    "golden_cross": 0,
+    "rsi": 41.16,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-02-07",
+    "close": 91.96,
+    "volume": 15602800,
+    "rv_30d": 62.29,
+    "rv_90d": 57.27,
+    "iv_premium": -62.1,
+    "above_50sma": 0,
+    "above_200sma": 0,
+    "golden_cross": 0,
+    "rsi": 34.03,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-02-10",
+    "close": 95.58,
+    "volume": 16217900,
+    "rv_30d": 63.2,
+    "rv_90d": 57.37,
+    "iv_premium": -63.0,
+    "above_50sma": 0,
+    "above_200sma": 0,
+    "golden_cross": 0,
+    "rsi": 34.86,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-02-11",
+    "close": 93.73,
+    "volume": 12124000,
+    "rv_30d": 63.52,
+    "rv_90d": 57.19,
+    "iv_premium": -63.33,
+    "above_50sma": 0,
+    "above_200sma": 0,
+    "golden_cross": 0,
+    "rsi": 33.35,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-02-12",
+    "close": 91.34,
+    "volume": 22874700,
+    "rv_30d": 63.88,
+    "rv_90d": 57.35,
+    "iv_premium": -63.69,
+    "above_50sma": 0,
+    "above_200sma": 0,
+    "golden_cross": 0,
+    "rsi": 34.58,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-02-13",
+    "close": 95.31,
+    "volume": 16579900,
+    "rv_30d": 63.92,
+    "rv_90d": 57.72,
+    "iv_premium": -63.72,
+    "above_50sma": 0,
+    "above_200sma": 0,
+    "golden_cross": 0,
+    "rsi": 42.52,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-02-14",
+    "close": 99.15,
+    "volume": 21284500,
+    "rv_30d": 64.5,
+    "rv_90d": 58.11,
+    "iv_premium": -64.3,
+    "above_50sma": 1,
+    "above_200sma": 0,
+    "golden_cross": 1,
+    "rsi": 63.39,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-02-18",
+    "close": 106.4,
+    "volume": 29641900,
+    "rv_30d": 66.76,
+    "rv_90d": 59.36,
+    "iv_premium": -66.57,
+    "above_50sma": 1,
+    "above_200sma": 0,
+    "golden_cross": 1,
+    "rsi": 75.32,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-02-19",
+    "close": 103.98,
+    "volume": 17875900,
+    "rv_30d": 67.0,
+    "rv_90d": 59.49,
+    "iv_premium": -66.81,
+    "above_50sma": 1,
+    "above_200sma": 0,
+    "golden_cross": 1,
+    "rsi": 70.56,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-02-20",
+    "close": 102.8,
+    "volume": 14488000,
+    "rv_30d": 60.26,
+    "rv_90d": 59.5,
+    "iv_premium": -60.06,
+    "above_50sma": 1,
+    "above_200sma": 0,
+    "golden_cross": 1,
+    "rsi": 65.39,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-02-21",
+    "close": 98.48,
+    "volume": 18650800,
+    "rv_30d": 61.1,
+    "rv_90d": 59.57,
+    "iv_premium": -60.9,
+    "above_50sma": 1,
+    "above_200sma": 0,
+    "golden_cross": 1,
+    "rsi": 60.81,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-02-24",
+    "close": 95.06,
+    "volume": 14883700,
+    "rv_30d": 61.52,
+    "rv_90d": 59.82,
+    "iv_premium": -61.32,
+    "above_50sma": 0,
+    "above_200sma": 0,
+    "golden_cross": 0,
+    "rsi": 57.92,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-02-25",
+    "close": 92.88,
+    "volume": 18608200,
+    "rv_30d": 61.86,
+    "rv_90d": 59.89,
+    "iv_premium": -61.66,
+    "above_50sma": 0,
+    "above_200sma": 0,
+    "golden_cross": 0,
+    "rsi": 54.12,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-02-26",
+    "close": 97.35,
+    "volume": 21335200,
+    "rv_30d": 62.16,
+    "rv_90d": 60.13,
+    "iv_premium": -61.97,
+    "above_50sma": 1,
+    "above_200sma": 0,
+    "golden_cross": 1,
+    "rsi": 55.7,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-02-27",
+    "close": 91.48,
+    "volume": 22386300,
+    "rv_30d": 64.29,
+    "rv_90d": 60.43,
+    "iv_premium": -64.09,
+    "above_50sma": 0,
+    "above_200sma": 0,
+    "golden_cross": 0,
+    "rsi": 48.2,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-02-28",
+    "close": 93.28,
+    "volume": 23359100,
+    "rv_30d": 61.99,
+    "rv_90d": 60.37,
+    "iv_premium": -61.79,
+    "above_50sma": 0,
+    "above_200sma": 0,
+    "golden_cross": 0,
+    "rsi": 52.5,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-03-03",
+    "close": 90.21,
+    "volume": 20281800,
+    "rv_30d": 62.61,
+    "rv_90d": 60.59,
+    "iv_premium": -62.42,
+    "above_50sma": 0,
+    "above_200sma": 0,
+    "golden_cross": 0,
+    "rsi": 45.25,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-03-04",
+    "close": 90.86,
+    "volume": 23611500,
+    "rv_30d": 61.87,
+    "rv_90d": 60.54,
+    "iv_premium": -61.67,
+    "above_50sma": 0,
+    "above_200sma": 0,
+    "golden_cross": 0,
+    "rsi": 47.88,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-03-05",
+    "close": 93.99,
+    "volume": 14010300,
+    "rv_30d": 61.87,
+    "rv_90d": 60.8,
+    "iv_premium": -61.68,
+    "above_50sma": 0,
+    "above_200sma": 0,
+    "golden_cross": 0,
+    "rsi": 53.99,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-03-06",
+    "close": 88.94,
+    "volume": 18708100,
+    "rv_30d": 63.51,
+    "rv_90d": 61.31,
+    "iv_premium": -63.31,
+    "above_50sma": 0,
+    "above_200sma": 0,
+    "golden_cross": 0,
+    "rsi": 44.26,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-03-07",
+    "close": 92.62,
+    "volume": 19133900,
+    "rv_30d": 64.08,
+    "rv_90d": 61.65,
+    "iv_premium": -63.88,
+    "above_50sma": 0,
+    "above_200sma": 0,
+    "golden_cross": 0,
+    "rsi": 44.37,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-03-10",
+    "close": 86.76,
+    "volume": 21897900,
+    "rv_30d": 66.33,
+    "rv_90d": 62.5,
+    "iv_premium": -66.13,
+    "above_50sma": 0,
+    "above_200sma": 0,
+    "golden_cross": 0,
+    "rsi": 30.49,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-03-11",
+    "close": 88.72,
+    "volume": 21962100,
+    "rv_30d": 57.55,
+    "rv_90d": 62.59,
+    "iv_premium": -57.36,
+    "above_50sma": 0,
+    "above_200sma": 0,
+    "golden_cross": 0,
+    "rsi": 35.07,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-03-12",
+    "close": 95.29,
+    "volume": 23584700,
+    "rv_30d": 60.6,
+    "rv_90d": 63.78,
+    "iv_premium": -60.41,
+    "above_50sma": 1,
+    "above_200sma": 0,
+    "golden_cross": 1,
+    "rsi": 44.4,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-03-13",
+    "close": 94.53,
+    "volume": 18824700,
+    "rv_30d": 60.67,
+    "rv_90d": 63.48,
+    "iv_premium": -60.47,
+    "above_50sma": 0,
+    "above_200sma": 0,
+    "golden_cross": 0,
+    "rsi": 47.29,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-03-14",
+    "close": 100.42,
+    "volume": 24623600,
+    "rv_30d": 62.22,
+    "rv_90d": 63.92,
+    "iv_premium": -62.02,
+    "above_50sma": 1,
+    "above_200sma": 0,
+    "golden_cross": 1,
+    "rsi": 56.23,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-03-17",
+    "close": 102.73,
+    "volume": 17095100,
+    "rv_30d": 62.24,
+    "rv_90d": 64.02,
+    "iv_premium": -62.05,
+    "above_50sma": 1,
+    "above_200sma": 0,
+    "golden_cross": 1,
+    "rsi": 60.4,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-03-18",
+    "close": 101.35,
+    "volume": 18434100,
+    "rv_30d": 62.22,
+    "rv_90d": 63.99,
+    "iv_premium": -62.02,
+    "above_50sma": 1,
+    "above_200sma": 0,
+    "golden_cross": 1,
+    "rsi": 55.13,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-03-19",
+    "close": 101.68,
+    "volume": 16633100,
+    "rv_30d": 62.21,
+    "rv_90d": 63.7,
+    "iv_premium": -62.02,
+    "above_50sma": 1,
+    "above_200sma": 0,
+    "golden_cross": 1,
+    "rsi": 62.69,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-03-20",
+    "close": 102.62,
+    "volume": 29204400,
+    "rv_30d": 61.67,
+    "rv_90d": 62.91,
+    "iv_premium": -61.48,
+    "above_50sma": 1,
+    "above_200sma": 0,
+    "golden_cross": 1,
+    "rsi": 61.82,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 1
+  },
+  {
+    "Date": "2025-03-21",
+    "close": 94.37,
+    "volume": 63239600,
+    "rv_30d": 66.29,
+    "rv_90d": 64.28,
+    "iv_premium": -66.09,
+    "above_50sma": 0,
+    "above_200sma": 0,
+    "golden_cross": 0,
+    "rsi": 55.92,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 1
+  },
+  {
+    "Date": "2025-03-24",
+    "close": 96.58,
+    "volume": 35406600,
+    "rv_30d": 66.18,
+    "rv_90d": 64.38,
+    "iv_premium": -65.98,
+    "above_50sma": 1,
+    "above_200sma": 0,
+    "golden_cross": 1,
+    "rsi": 57.31,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 1
+  },
+  {
+    "Date": "2025-03-25",
+    "close": 93.83,
+    "volume": 22191700,
+    "rv_30d": 65.81,
+    "rv_90d": 64.37,
+    "iv_premium": -65.62,
+    "above_50sma": 0,
+    "above_200sma": 0,
+    "golden_cross": 0,
+    "rsi": 51.18,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 1
+  },
+  {
+    "Date": "2025-03-26",
+    "close": 91.79,
+    "volume": 27107200,
+    "rv_30d": 65.88,
+    "rv_90d": 64.1,
+    "iv_premium": -65.68,
+    "above_50sma": 0,
+    "above_200sma": 0,
+    "golden_cross": 0,
+    "rsi": 54.63,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 1
+  },
+  {
+    "Date": "2025-03-27",
+    "close": 90.82,
+    "volume": 15658700,
+    "rv_30d": 65.52,
+    "rv_90d": 63.77,
+    "iv_premium": -65.32,
+    "above_50sma": 0,
+    "above_200sma": 0,
+    "golden_cross": 0,
+    "rsi": 49.11,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 1
+  },
+  {
+    "Date": "2025-03-28",
+    "close": 88.11,
+    "volume": 17118000,
+    "rv_30d": 64.8,
+    "rv_90d": 63.95,
+    "iv_premium": -64.6,
+    "above_50sma": 0,
+    "above_200sma": 0,
+    "golden_cross": 0,
+    "rsi": 53.11,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 1
+  },
+  {
+    "Date": "2025-03-31",
+    "close": 86.68,
+    "volume": 21089500,
+    "rv_30d": 63.66,
+    "rv_90d": 63.83,
+    "iv_premium": -63.47,
+    "above_50sma": 0,
+    "above_200sma": 0,
+    "golden_cross": 0,
+    "rsi": 48.35,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 1
+  },
+  {
+    "Date": "2025-04-01",
+    "close": 88.5,
+    "volume": 15337100,
+    "rv_30d": 59.88,
+    "rv_90d": 63.89,
+    "iv_premium": -59.69,
+    "above_50sma": 0,
+    "above_200sma": 0,
+    "golden_cross": 0,
+    "rsi": 40.54,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-04-02",
+    "close": 88.39,
+    "volume": 14520400,
+    "rv_30d": 59.67,
+    "rv_90d": 63.89,
+    "iv_premium": -59.47,
+    "above_50sma": 0,
+    "above_200sma": 0,
+    "golden_cross": 0,
+    "rsi": 41.33,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-04-03",
+    "close": 74.16,
+    "volume": 44839500,
+    "rv_30d": 74.92,
+    "rv_90d": 69.31,
+    "iv_premium": -74.72,
+    "above_50sma": 0,
+    "above_200sma": 0,
+    "golden_cross": 0,
+    "rsi": 18.05,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-04-04",
+    "close": 64.57,
+    "volume": 50737700,
+    "rv_30d": 82.13,
+    "rv_90d": 72.05,
+    "iv_premium": -81.93,
+    "above_50sma": 0,
+    "above_200sma": 0,
+    "golden_cross": 0,
+    "rsi": 10.37,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-04-07",
+    "close": 68.21,
+    "volume": 50181800,
+    "rv_30d": 84.21,
+    "rv_90d": 72.75,
+    "iv_premium": -84.02,
+    "above_50sma": 0,
+    "above_200sma": 0,
+    "golden_cross": 0,
+    "rsi": 19.14,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-04-08",
+    "close": 65.38,
+    "volume": 40822100,
+    "rv_30d": 84.64,
+    "rv_90d": 72.94,
+    "iv_premium": -84.44,
+    "above_50sma": 0,
+    "above_200sma": 0,
+    "golden_cross": 0,
+    "rsi": 17.45,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-04-09",
+    "close": 77.68,
+    "volume": 63132600,
+    "rv_30d": 101.14,
+    "rv_90d": 79.61,
+    "iv_premium": -100.94,
+    "above_50sma": 0,
+    "above_200sma": 0,
+    "golden_cross": 0,
+    "rsi": 35.71,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-04-10",
+    "close": 69.88,
+    "volume": 44882300,
+    "rv_30d": 103.66,
+    "rv_90d": 81.12,
+    "iv_premium": -103.47,
+    "above_50sma": 0,
+    "above_200sma": 0,
+    "golden_cross": 0,
+    "rsi": 34.84,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-04-11",
+    "close": 69.38,
+    "volume": 30807800,
+    "rv_30d": 103.36,
+    "rv_90d": 81.13,
+    "iv_premium": -103.16,
+    "above_50sma": 0,
+    "above_200sma": 0,
+    "golden_cross": 0,
+    "rsi": 32.66,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-04-14",
+    "close": 70.85,
+    "volume": 32634700,
+    "rv_30d": 103.4,
+    "rv_90d": 81.21,
+    "iv_premium": -103.2,
+    "above_50sma": 0,
+    "above_200sma": 0,
+    "golden_cross": 0,
+    "rsi": 35.58,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-04-15",
+    "close": 70.87,
+    "volume": 19132700,
+    "rv_30d": 103.34,
+    "rv_90d": 81.17,
+    "iv_premium": -103.14,
+    "above_50sma": 0,
+    "above_200sma": 0,
+    "golden_cross": 0,
+    "rsi": 36.59,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-04-16",
+    "close": 69.16,
+    "volume": 28475000,
+    "rv_30d": 102.73,
+    "rv_90d": 81.02,
+    "iv_premium": -102.53,
+    "above_50sma": 0,
+    "above_200sma": 0,
+    "golden_cross": 0,
+    "rsi": 35.97,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-04-17",
+    "close": 68.64,
+    "volume": 20694100,
+    "rv_30d": 101.82,
+    "rv_90d": 80.95,
+    "iv_premium": -101.62,
+    "above_50sma": 0,
+    "above_200sma": 0,
+    "golden_cross": 0,
+    "rsi": 37.0,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-04-21",
+    "close": 66.58,
+    "volume": 19826100,
+    "rv_30d": 100.99,
+    "rv_90d": 81.07,
+    "iv_premium": -100.8,
+    "above_50sma": 0,
+    "above_200sma": 0,
+    "golden_cross": 0,
+    "rsi": 36.36,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-04-22",
+    "close": 70.04,
+    "volume": 20351200,
+    "rv_30d": 101.13,
+    "rv_90d": 81.54,
+    "iv_premium": -100.94,
+    "above_50sma": 0,
+    "above_200sma": 0,
+    "golden_cross": 0,
+    "rsi": 38.77,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-04-23",
+    "close": 72.76,
+    "volume": 26385500,
+    "rv_30d": 101.63,
+    "rv_90d": 81.5,
+    "iv_premium": -101.43,
+    "above_50sma": 0,
+    "above_200sma": 0,
+    "golden_cross": 0,
+    "rsi": 41.59,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-04-24",
+    "close": 77.24,
+    "volume": 23875600,
+    "rv_30d": 100.85,
+    "rv_90d": 81.89,
+    "iv_premium": -100.65,
+    "above_50sma": 0,
+    "above_200sma": 0,
+    "golden_cross": 0,
+    "rsi": 55.16,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-04-25",
+    "close": 79.59,
+    "volume": 19746200,
+    "rv_30d": 101.37,
+    "rv_90d": 81.84,
+    "iv_premium": -101.17,
+    "above_50sma": 0,
+    "above_200sma": 0,
+    "golden_cross": 0,
+    "rsi": 68.06,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-04-28",
+    "close": 78.37,
+    "volume": 16882400,
+    "rv_30d": 99.45,
+    "rv_90d": 81.53,
+    "iv_premium": -99.26,
+    "above_50sma": 0,
+    "above_200sma": 0,
+    "golden_cross": 0,
+    "rsi": 63.46,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-04-29",
+    "close": 76.7,
+    "volume": 17098000,
+    "rv_30d": 99.15,
+    "rv_90d": 81.0,
+    "iv_premium": -98.95,
+    "above_50sma": 0,
+    "above_200sma": 0,
+    "golden_cross": 0,
+    "rsi": 65.58,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-04-30",
+    "close": 76.77,
+    "volume": 19779300,
+    "rv_30d": 99.16,
+    "rv_90d": 81.0,
+    "iv_premium": -98.97,
+    "above_50sma": 0,
+    "above_200sma": 0,
+    "golden_cross": 0,
+    "rsi": 49.9,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-05-01",
+    "close": 77.58,
+    "volume": 15349200,
+    "rv_30d": 99.25,
+    "rv_90d": 80.73,
+    "iv_premium": -99.06,
+    "above_50sma": 0,
+    "above_200sma": 0,
+    "golden_cross": 0,
+    "rsi": 67.17,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-05-02",
+    "close": 80.53,
+    "volume": 18899700,
+    "rv_30d": 100.01,
+    "rv_90d": 76.33,
+    "iv_premium": -99.81,
+    "above_50sma": 0,
+    "above_200sma": 0,
+    "golden_cross": 0,
+    "rsi": 72.07,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-05-05",
+    "close": 80.23,
+    "volume": 12513600,
+    "rv_30d": 97.5,
+    "rv_90d": 76.11,
+    "iv_premium": -97.3,
+    "above_50sma": 0,
+    "above_200sma": 0,
+    "golden_cross": 0,
+    "rsi": 69.5,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-05-06",
+    "close": 80.32,
+    "volume": 13173800,
+    "rv_30d": 97.18,
+    "rv_90d": 76.11,
+    "iv_premium": -96.98,
+    "above_50sma": 0,
+    "above_200sma": 0,
+    "golden_cross": 0,
+    "rsi": 69.58,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-05-07",
+    "close": 82.42,
+    "volume": 14889700,
+    "rv_30d": 97.29,
+    "rv_90d": 76.23,
+    "iv_premium": -97.09,
+    "above_50sma": 0,
+    "above_200sma": 0,
+    "golden_cross": 0,
+    "rsi": 76.9,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-05-08",
+    "close": 84.95,
+    "volume": 17580500,
+    "rv_30d": 97.57,
+    "rv_90d": 76.39,
+    "iv_premium": -97.37,
+    "above_50sma": 1,
+    "above_200sma": 0,
+    "golden_cross": 1,
+    "rsi": 80.49,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-05-09",
+    "close": 85.65,
+    "volume": 13017600,
+    "rv_30d": 97.56,
+    "rv_90d": 76.36,
+    "iv_premium": -97.36,
+    "above_50sma": 1,
+    "above_200sma": 0,
+    "golden_cross": 1,
+    "rsi": 88.08,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-05-12",
+    "close": 92.07,
+    "volume": 27765300,
+    "rv_30d": 99.49,
+    "rv_90d": 77.1,
+    "iv_premium": -99.29,
+    "above_50sma": 1,
+    "above_200sma": 0,
+    "golden_cross": 1,
+    "rsi": 88.84,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-05-13",
+    "close": 96.7,
+    "volume": 28009100,
+    "rv_30d": 100.21,
+    "rv_90d": 77.47,
+    "iv_premium": -100.02,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 89.18,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-05-14",
+    "close": 95.09,
+    "volume": 28044400,
+    "rv_30d": 100.3,
+    "rv_90d": 77.31,
+    "iv_premium": -100.11,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 82.64,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-05-15",
+    "close": 95.22,
+    "volume": 24196100,
+    "rv_30d": 100.29,
+    "rv_90d": 77.18,
+    "iv_premium": -100.1,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 80.96,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-05-16",
+    "close": 97.77,
+    "volume": 22609300,
+    "rv_30d": 87.31,
+    "rv_90d": 75.32,
+    "iv_premium": -87.11,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 86.58,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-05-19",
+    "close": 98.41,
+    "volume": 14380100,
+    "rv_30d": 76.59,
+    "rv_90d": 75.2,
+    "iv_premium": -76.39,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 93.13,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-05-20",
+    "close": 97.87,
+    "volume": 12331300,
+    "rv_30d": 75.79,
+    "rv_90d": 75.09,
+    "iv_premium": -75.6,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 91.38,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-05-21",
+    "close": 95.61,
+    "volume": 15764300,
+    "rv_30d": 74.83,
+    "rv_90d": 75.2,
+    "iv_premium": -74.63,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 84.37,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-05-22",
+    "close": 94.6,
+    "volume": 13245200,
+    "rv_30d": 53.8,
+    "rv_90d": 74.86,
+    "iv_premium": -53.6,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 79.18,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-05-23",
+    "close": 93.15,
+    "volume": 16545000,
+    "rv_30d": 43.72,
+    "rv_90d": 74.8,
+    "iv_premium": -43.53,
+    "above_50sma": 1,
+    "above_200sma": 0,
+    "golden_cross": 1,
+    "rsi": 76.07,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-05-27",
+    "close": 96.15,
+    "volume": 17612600,
+    "rv_30d": 43.87,
+    "rv_90d": 74.33,
+    "iv_premium": -43.68,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 78.33,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-05-28",
+    "close": 95.95,
+    "volume": 10500300,
+    "rv_30d": 43.94,
+    "rv_90d": 74.32,
+    "iv_premium": -43.74,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 75.93,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-05-29",
+    "close": 96.57,
+    "volume": 14628700,
+    "rv_30d": 43.85,
+    "rv_90d": 74.15,
+    "iv_premium": -43.65,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 73.86,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-05-30",
+    "close": 94.23,
+    "volume": 23758200,
+    "rv_30d": 43.85,
+    "rv_90d": 74.03,
+    "iv_premium": -43.66,
+    "above_50sma": 1,
+    "above_200sma": 0,
+    "golden_cross": 1,
+    "rsi": 67.09,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-06-02",
+    "close": 97.95,
+    "volume": 16850300,
+    "rv_30d": 44.26,
+    "rv_90d": 74.33,
+    "iv_premium": -44.06,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 62.6,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-06-03",
+    "close": 102.01,
+    "volume": 22757600,
+    "rv_30d": 43.16,
+    "rv_90d": 74.34,
+    "iv_premium": -42.97,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 61.29,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-06-04",
+    "close": 103.0,
+    "volume": 14595900,
+    "rv_30d": 41.7,
+    "rv_90d": 74.3,
+    "iv_premium": -41.5,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 67.0,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-06-05",
+    "close": 106.04,
+    "volume": 28833700,
+    "rv_30d": 41.29,
+    "rv_90d": 71.7,
+    "iv_premium": -41.1,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 70.39,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-06-06",
+    "close": 108.3,
+    "volume": 20710100,
+    "rv_30d": 38.74,
+    "rv_90d": 71.54,
+    "iv_premium": -38.55,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 69.8,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-06-09",
+    "close": 110.69,
+    "volume": 20159700,
+    "rv_30d": 38.46,
+    "rv_90d": 71.6,
+    "iv_premium": -38.27,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 71.44,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-06-10",
+    "close": 113.87,
+    "volume": 22949400,
+    "rv_30d": 37.93,
+    "rv_90d": 71.47,
+    "iv_premium": -37.73,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 75.43,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-06-11",
+    "close": 115.75,
+    "volume": 21614100,
+    "rv_30d": 36.52,
+    "rv_90d": 71.45,
+    "iv_premium": -36.33,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 82.58,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-06-12",
+    "close": 115.9,
+    "volume": 17076500,
+    "rv_30d": 36.51,
+    "rv_90d": 71.38,
+    "iv_premium": -36.32,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 85.66,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-06-13",
+    "close": 115.32,
+    "volume": 17453000,
+    "rv_30d": 36.92,
+    "rv_90d": 71.39,
+    "iv_premium": -36.72,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 88.84,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-06-16",
+    "close": 119.55,
+    "volume": 21374100,
+    "rv_30d": 36.85,
+    "rv_90d": 71.45,
+    "iv_premium": -36.65,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 89.02,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-06-17",
+    "close": 120.05,
+    "volume": 20837700,
+    "rv_30d": 36.6,
+    "rv_90d": 71.44,
+    "iv_premium": -36.4,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 89.82,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-06-18",
+    "close": 121.53,
+    "volume": 20180000,
+    "rv_30d": 36.41,
+    "rv_90d": 71.3,
+    "iv_premium": -36.21,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 90.02,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-06-20",
+    "close": 123.3,
+    "volume": 29290400,
+    "rv_30d": 36.23,
+    "rv_90d": 71.08,
+    "iv_premium": -36.03,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 98.23,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 1
+  },
+  {
+    "Date": "2025-06-23",
+    "close": 121.79,
+    "volume": 23399200,
+    "rv_30d": 36.62,
+    "rv_90d": 71.02,
+    "iv_premium": -36.43,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 93.24,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 1
+  },
+  {
+    "Date": "2025-06-24",
+    "close": 127.6,
+    "volume": 26420600,
+    "rv_30d": 38.01,
+    "rv_90d": 71.22,
+    "iv_premium": -37.81,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 93.4,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 1
+  },
+  {
+    "Date": "2025-06-25",
+    "close": 126.95,
+    "volume": 39407000,
+    "rv_30d": 33.63,
+    "rv_90d": 70.94,
+    "iv_premium": -33.43,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 91.28,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 1
+  },
+  {
+    "Date": "2025-06-26",
+    "close": 125.7,
+    "volume": 62678100,
+    "rv_30d": 32.0,
+    "rv_90d": 70.71,
+    "iv_premium": -31.8,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 86.43,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 1
+  },
+  {
+    "Date": "2025-06-27",
+    "close": 124.46,
+    "volume": 36888600,
+    "rv_30d": 31.58,
+    "rv_90d": 69.76,
+    "iv_premium": -31.39,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 81.39,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 1
+  },
+  {
+    "Date": "2025-06-30",
+    "close": 122.96,
+    "volume": 22799700,
+    "rv_30d": 32.11,
+    "rv_90d": 69.67,
+    "iv_premium": -31.91,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 74.94,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 1
+  },
+  {
+    "Date": "2025-07-01",
+    "close": 120.6,
+    "volume": 24825800,
+    "rv_30d": 32.63,
+    "rv_90d": 69.73,
+    "iv_premium": -32.43,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 64.51,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-07-02",
+    "close": 121.45,
+    "volume": 29303800,
+    "rv_30d": 32.63,
+    "rv_90d": 69.32,
+    "iv_premium": -32.43,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 62.8,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-07-03",
+    "close": 122.0,
+    "volume": 13247900,
+    "rv_30d": 32.41,
+    "rv_90d": 69.02,
+    "iv_premium": -32.22,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 63.4,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-07-07",
+    "close": 119.75,
+    "volume": 19148400,
+    "rv_30d": 32.06,
+    "rv_90d": 68.97,
+    "iv_premium": -31.87,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 59.41,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-07-08",
+    "close": 124.24,
+    "volume": 26238200,
+    "rv_30d": 32.7,
+    "rv_90d": 68.8,
+    "iv_premium": -32.51,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 59.57,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-07-09",
+    "close": 122.06,
+    "volume": 20464000,
+    "rv_30d": 32.85,
+    "rv_90d": 68.04,
+    "iv_premium": -32.65,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 54.25,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-07-10",
+    "close": 122.93,
+    "volume": 15378400,
+    "rv_30d": 32.12,
+    "rv_90d": 68.0,
+    "iv_premium": -31.92,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 53.19,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-07-11",
+    "close": 124.35,
+    "volume": 15820600,
+    "rv_30d": 31.97,
+    "rv_90d": 67.72,
+    "iv_premium": -31.78,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 52.53,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-07-14",
+    "close": 118.44,
+    "volume": 32117700,
+    "rv_30d": 35.92,
+    "rv_90d": 68.27,
+    "iv_premium": -35.72,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 45.27,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-07-15",
+    "close": 119.94,
+    "volume": 24958900,
+    "rv_30d": 34.7,
+    "rv_90d": 68.09,
+    "iv_premium": -34.5,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 36.54,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-07-16",
+    "close": 116.26,
+    "volume": 30614800,
+    "rv_30d": 35.18,
+    "rv_90d": 67.65,
+    "iv_premium": -34.98,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 32.75,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-07-17",
+    "close": 113.1,
+    "volume": 34702400,
+    "rv_30d": 34.79,
+    "rv_90d": 67.55,
+    "iv_premium": -34.59,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 30.58,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-07-18",
+    "close": 114.22,
+    "volume": 19349900,
+    "rv_30d": 34.79,
+    "rv_90d": 66.62,
+    "iv_premium": -34.59,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 34.36,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-07-21",
+    "close": 113.07,
+    "volume": 22189800,
+    "rv_30d": 34.13,
+    "rv_90d": 66.58,
+    "iv_premium": -33.93,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 34.61,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-07-22",
+    "close": 109.06,
+    "volume": 27917600,
+    "rv_30d": 35.33,
+    "rv_90d": 65.82,
+    "iv_premium": -35.13,
+    "above_50sma": 0,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 32.58,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-07-23",
+    "close": 109.67,
+    "volume": 17810000,
+    "rv_30d": 34.78,
+    "rv_90d": 65.8,
+    "iv_premium": -34.58,
+    "above_50sma": 0,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 32.23,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-07-24",
+    "close": 111.57,
+    "volume": 20293100,
+    "rv_30d": 34.1,
+    "rv_90d": 65.07,
+    "iv_premium": -33.91,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 35.23,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-07-25",
+    "close": 111.1,
+    "volume": 16372300,
+    "rv_30d": 33.73,
+    "rv_90d": 64.98,
+    "iv_premium": -33.53,
+    "above_50sma": 0,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 37.06,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-07-28",
+    "close": 111.09,
+    "volume": 12932300,
+    "rv_30d": 33.72,
+    "rv_90d": 64.93,
+    "iv_premium": -33.53,
+    "above_50sma": 0,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 27.08,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-07-29",
+    "close": 111.8,
+    "volume": 16653300,
+    "rv_30d": 33.77,
+    "rv_90d": 64.93,
+    "iv_premium": -33.58,
+    "above_50sma": 0,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 31.24,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-07-30",
+    "close": 114.57,
+    "volume": 16378800,
+    "rv_30d": 32.79,
+    "rv_90d": 65.03,
+    "iv_premium": -32.6,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 36.24,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-07-31",
+    "close": 108.98,
+    "volume": 29224300,
+    "rv_30d": 35.52,
+    "rv_90d": 64.11,
+    "iv_premium": -35.32,
+    "above_50sma": 0,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 27.32,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-08-01",
+    "close": 104.73,
+    "volume": 24003300,
+    "rv_30d": 36.7,
+    "rv_90d": 64.38,
+    "iv_premium": -36.5,
+    "above_50sma": 0,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 28.18,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-08-04",
+    "close": 107.61,
+    "volume": 14780600,
+    "rv_30d": 37.47,
+    "rv_90d": 64.32,
+    "iv_premium": -37.27,
+    "above_50sma": 0,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 31.91,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-08-05",
+    "close": 108.9,
+    "volume": 17836000,
+    "rv_30d": 37.68,
+    "rv_90d": 64.21,
+    "iv_premium": -37.48,
+    "above_50sma": 0,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 38.58,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-08-06",
+    "close": 108.62,
+    "volume": 13021900,
+    "rv_30d": 34.42,
+    "rv_90d": 64.17,
+    "iv_premium": -34.22,
+    "above_50sma": 0,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 42.48,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-08-07",
+    "close": 111.71,
+    "volume": 18986500,
+    "rv_30d": 35.76,
+    "rv_90d": 64.07,
+    "iv_premium": -35.57,
+    "above_50sma": 0,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 46.52,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-08-08",
+    "close": 118.72,
+    "volume": 28962200,
+    "rv_30d": 40.6,
+    "rv_90d": 64.75,
+    "iv_premium": -40.4,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 58.68,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-08-11",
+    "close": 123.54,
+    "volume": 35065800,
+    "rv_30d": 42.3,
+    "rv_90d": 64.97,
+    "iv_premium": -42.11,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 70.42,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-08-12",
+    "close": 127.56,
+    "volume": 25961200,
+    "rv_30d": 43.16,
+    "rv_90d": 65.13,
+    "iv_premium": -42.96,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 72.72,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-08-13",
+    "close": 124.09,
+    "volume": 18438200,
+    "rv_30d": 43.56,
+    "rv_90d": 59.05,
+    "iv_premium": -43.36,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 65.85,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-08-14",
+    "close": 125.11,
+    "volume": 12235900,
+    "rv_30d": 43.57,
+    "rv_90d": 54.4,
+    "iv_premium": -43.37,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 67.39,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-08-15",
+    "close": 120.69,
+    "volume": 18986700,
+    "rv_30d": 44.83,
+    "rv_90d": 54.25,
+    "iv_premium": -44.63,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 61.4,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-08-18",
+    "close": 123.37,
+    "volume": 12208800,
+    "rv_30d": 44.92,
+    "rv_90d": 53.68,
+    "iv_premium": -44.72,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 62.88,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-08-19",
+    "close": 121.87,
+    "volume": 11491200,
+    "rv_30d": 43.74,
+    "rv_90d": 44.25,
+    "iv_premium": -43.54,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 58.66,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-08-20",
+    "close": 117.04,
+    "volume": 25795000,
+    "rv_30d": 44.95,
+    "rv_90d": 41.2,
+    "iv_premium": -44.75,
+    "above_50sma": 0,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 60.04,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-08-21",
+    "close": 115.62,
+    "volume": 13174900,
+    "rv_30d": 44.99,
+    "rv_90d": 41.25,
+    "iv_premium": -44.8,
+    "above_50sma": 0,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 64.49,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-08-22",
+    "close": 117.51,
+    "volume": 17038300,
+    "rv_30d": 45.14,
+    "rv_90d": 41.21,
+    "iv_premium": -44.94,
+    "above_50sma": 0,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 63.36,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-08-25",
+    "close": 116.25,
+    "volume": 8674800,
+    "rv_30d": 43.09,
+    "rv_90d": 41.29,
+    "iv_premium": -42.89,
+    "above_50sma": 0,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 60.17,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-08-26",
+    "close": 116.33,
+    "volume": 12584300,
+    "rv_30d": 42.91,
+    "rv_90d": 40.99,
+    "iv_premium": -42.72,
+    "above_50sma": 0,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 60.69,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-08-27",
+    "close": 117.58,
+    "volume": 15349300,
+    "rv_30d": 42.07,
+    "rv_90d": 40.93,
+    "iv_premium": -41.87,
+    "above_50sma": 0,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 58.59,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-08-28",
+    "close": 121.82,
+    "volume": 17295500,
+    "rv_30d": 42.42,
+    "rv_90d": 40.77,
+    "iv_premium": -42.22,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 54.97,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-08-29",
+    "close": 118.84,
+    "volume": 16774000,
+    "rv_30d": 43.08,
+    "rv_90d": 40.39,
+    "iv_premium": -42.89,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 43.96,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-09-02",
+    "close": 118.31,
+    "volume": 13771900,
+    "rv_30d": 42.98,
+    "rv_90d": 40.05,
+    "iv_premium": -42.78,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 36.19,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-09-03",
+    "close": 118.55,
+    "volume": 14101300,
+    "rv_30d": 41.5,
+    "rv_90d": 38.92,
+    "iv_premium": -41.31,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 40.94,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-09-04",
+    "close": 124.03,
+    "volume": 18589100,
+    "rv_30d": 43.34,
+    "rv_90d": 39.3,
+    "iv_premium": -43.15,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 49.16,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-09-05",
+    "close": 131.18,
+    "volume": 28416000,
+    "rv_30d": 45.89,
+    "rv_90d": 40.11,
+    "iv_premium": -45.69,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 64.95,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-09-08",
+    "close": 131.27,
+    "volume": 19492600,
+    "rv_30d": 45.81,
+    "rv_90d": 39.85,
+    "iv_premium": -45.62,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 62.2,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-09-09",
+    "close": 135.04,
+    "volume": 20705000,
+    "rv_30d": 46.24,
+    "rv_90d": 40.01,
+    "iv_premium": -46.05,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 68.54,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-09-10",
+    "close": 139.8,
+    "volume": 25791300,
+    "rv_30d": 46.96,
+    "rv_90d": 40.29,
+    "iv_premium": -46.77,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 81.9,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-09-11",
+    "close": 150.35,
+    "volume": 52446400,
+    "rv_30d": 50.7,
+    "rv_90d": 41.58,
+    "iv_premium": -50.5,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 88.65,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-09-12",
+    "close": 157.0,
+    "volume": 32288300,
+    "rv_30d": 48.51,
+    "rv_90d": 41.99,
+    "iv_premium": -48.31,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 89.49,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-09-15",
+    "close": 157.54,
+    "volume": 20101400,
+    "rv_30d": 46.07,
+    "rv_90d": 41.99,
+    "iv_premium": -45.88,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 92.18,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-09-16",
+    "close": 158.59,
+    "volume": 16911600,
+    "rv_30d": 45.94,
+    "rv_90d": 41.87,
+    "iv_premium": -45.75,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 92.3,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-09-17",
+    "close": 159.76,
+    "volume": 18843600,
+    "rv_30d": 45.97,
+    "rv_90d": 41.69,
+    "iv_premium": -45.78,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 92.23,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-09-18",
+    "close": 168.65,
+    "volume": 28212800,
+    "rv_30d": 47.31,
+    "rv_90d": 42.46,
+    "iv_premium": -47.11,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 92.62,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-09-19",
+    "close": 162.49,
+    "volume": 37309900,
+    "rv_30d": 49.42,
+    "rv_90d": 41.57,
+    "iv_premium": -49.23,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 89.88,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-09-22",
+    "close": 164.38,
+    "volume": 25851200,
+    "rv_30d": 47.12,
+    "rv_90d": 40.92,
+    "iv_premium": -46.93,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 91.14,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 1
+  },
+  {
+    "Date": "2025-09-23",
+    "close": 166.17,
+    "volume": 43316500,
+    "rv_30d": 46.3,
+    "rv_90d": 40.74,
+    "iv_premium": -46.1,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 91.32,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 1
+  },
+  {
+    "Date": "2025-09-24",
+    "close": 161.48,
+    "volume": 57096400,
+    "rv_30d": 47.11,
+    "rv_90d": 41.15,
+    "iv_premium": -46.91,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 83.91,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 1
+  },
+  {
+    "Date": "2025-09-25",
+    "close": 156.6,
+    "volume": 32209200,
+    "rv_30d": 47.31,
+    "rv_90d": 41.45,
+    "iv_premium": -47.11,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 74.68,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 1
+  },
+  {
+    "Date": "2025-09-26",
+    "close": 157.04,
+    "volume": 24045000,
+    "rv_30d": 47.33,
+    "rv_90d": 41.45,
+    "iv_premium": -47.14,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 74.83,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 1
+  },
+  {
+    "Date": "2025-09-29",
+    "close": 163.66,
+    "volume": 26506500,
+    "rv_30d": 46.49,
+    "rv_90d": 41.85,
+    "iv_premium": -46.29,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 75.69,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 1
+  },
+  {
+    "Date": "2025-09-30",
+    "close": 167.08,
+    "volume": 20092500,
+    "rv_30d": 46.46,
+    "rv_90d": 41.63,
+    "iv_premium": -46.26,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 74.76,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 1
+  },
+  {
+    "Date": "2025-10-01",
+    "close": 181.89,
+    "volume": 41674800,
+    "rv_30d": 51.13,
+    "rv_90d": 43.73,
+    "iv_premium": -50.93,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 75.62,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-10-02",
+    "close": 183.48,
+    "volume": 25122200,
+    "rv_30d": 48.58,
+    "rv_90d": 43.56,
+    "iv_premium": -48.38,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 73.17,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-10-03",
+    "close": 187.68,
+    "volume": 29399300,
+    "rv_30d": 47.9,
+    "rv_90d": 43.44,
+    "iv_premium": -47.71,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 74.57,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-10-06",
+    "close": 190.8,
+    "volume": 36392300,
+    "rv_30d": 47.9,
+    "rv_90d": 43.43,
+    "iv_premium": -47.71,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 75.23,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-10-07",
+    "close": 185.54,
+    "volume": 27828200,
+    "rv_30d": 48.98,
+    "rv_90d": 43.84,
+    "iv_premium": -48.78,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 69.63,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-10-08",
+    "close": 196.38,
+    "volume": 26833900,
+    "rv_30d": 50.24,
+    "rv_90d": 44.32,
+    "iv_premium": -50.04,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 69.84,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-10-09",
+    "close": 192.17,
+    "volume": 19721500,
+    "rv_30d": 51.5,
+    "rv_90d": 44.29,
+    "iv_premium": -51.3,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 72.53,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-10-10",
+    "close": 181.45,
+    "volume": 26990300,
+    "rv_30d": 55.28,
+    "rv_90d": 45.18,
+    "iv_premium": -55.09,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 62.5,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-10-13",
+    "close": 192.61,
+    "volume": 20928400,
+    "rv_30d": 55.7,
+    "rv_90d": 46.1,
+    "iv_premium": -55.51,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 66.41,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-10-14",
+    "close": 186.91,
+    "volume": 15912400,
+    "rv_30d": 57.0,
+    "rv_90d": 46.36,
+    "iv_premium": -56.8,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 66.22,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-10-15",
+    "close": 191.78,
+    "volume": 17793100,
+    "rv_30d": 56.92,
+    "rv_90d": 46.41,
+    "iv_premium": -56.72,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 72.18,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-10-16",
+    "close": 202.36,
+    "volume": 42041300,
+    "rv_30d": 57.37,
+    "rv_90d": 47.04,
+    "iv_premium": -57.18,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 74.9,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-10-17",
+    "close": 202.21,
+    "volume": 23283100,
+    "rv_30d": 56.27,
+    "rv_90d": 46.92,
+    "iv_premium": -56.08,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 72.65,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-10-20",
+    "close": 206.6,
+    "volume": 23268400,
+    "rv_30d": 56.13,
+    "rv_90d": 46.96,
+    "iv_premium": -55.94,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 72.69,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-10-21",
+    "close": 202.12,
+    "volume": 13717300,
+    "rv_30d": 57.02,
+    "rv_90d": 47.19,
+    "iv_premium": -56.82,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 63.36,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-10-22",
+    "close": 198.31,
+    "volume": 21949800,
+    "rv_30d": 57.44,
+    "rv_90d": 47.34,
+    "iv_premium": -57.24,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 59.89,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-10-23",
+    "close": 206.54,
+    "volume": 19397900,
+    "rv_30d": 54.98,
+    "rv_90d": 47.44,
+    "iv_premium": -54.79,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 61.53,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-10-24",
+    "close": 218.84,
+    "volume": 25821800,
+    "rv_30d": 55.95,
+    "rv_90d": 48.26,
+    "iv_premium": -55.76,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 64.83,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-10-27",
+    "close": 219.92,
+    "volume": 23873100,
+    "rv_30d": 55.93,
+    "rv_90d": 48.25,
+    "iv_premium": -55.74,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 68.95,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-10-28",
+    "close": 221.73,
+    "volume": 14957500,
+    "rv_30d": 55.92,
+    "rv_90d": 48.23,
+    "iv_premium": -55.73,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 65.3,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-10-29",
+    "close": 226.44,
+    "volume": 23217300,
+    "rv_30d": 55.97,
+    "rv_90d": 48.18,
+    "iv_premium": -55.78,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 70.3,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-10-30",
+    "close": 223.83,
+    "volume": 14795100,
+    "rv_30d": 54.83,
+    "rv_90d": 47.79,
+    "iv_premium": -54.63,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 78.43,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-10-31",
+    "close": 223.59,
+    "volume": 16320000,
+    "rv_30d": 53.15,
+    "rv_90d": 47.77,
+    "iv_premium": -52.96,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 74.05,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-11-03",
+    "close": 234.51,
+    "volume": 21199300,
+    "rv_30d": 54.26,
+    "rv_90d": 48.2,
+    "iv_premium": -54.06,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 84.2,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-11-04",
+    "close": 217.85,
+    "volume": 23696200,
+    "rv_30d": 59.42,
+    "rv_90d": 49.88,
+    "iv_premium": -59.22,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 67.64,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-11-05",
+    "close": 237.3,
+    "volume": 28617400,
+    "rv_30d": 62.57,
+    "rv_90d": 51.65,
+    "iv_premium": -62.37,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 70.27,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-11-06",
+    "close": 238.13,
+    "volume": 32016800,
+    "rv_30d": 61.27,
+    "rv_90d": 51.45,
+    "iv_premium": -61.07,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 70.64,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-11-07",
+    "close": 237.72,
+    "volume": 30613800,
+    "rv_30d": 61.36,
+    "rv_90d": 51.48,
+    "iv_premium": -61.16,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 68.76,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-11-10",
+    "close": 253.09,
+    "volume": 27870600,
+    "rv_30d": 62.57,
+    "rv_90d": 52.34,
+    "iv_premium": -62.37,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 76.62,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-11-11",
+    "close": 240.91,
+    "volume": 22622500,
+    "rv_30d": 65.18,
+    "rv_90d": 53.01,
+    "iv_premium": -64.99,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 71.91,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-11-12",
+    "close": 244.7,
+    "volume": 17263100,
+    "rv_30d": 61.14,
+    "rv_90d": 52.79,
+    "iv_premium": -60.94,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 70.3,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-11-13",
+    "close": 236.75,
+    "volume": 32324600,
+    "rv_30d": 62.4,
+    "rv_90d": 53.06,
+    "iv_premium": -62.21,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 60.71,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-11-14",
+    "close": 246.63,
+    "volume": 36171100,
+    "rv_30d": 63.0,
+    "rv_90d": 53.36,
+    "iv_premium": -62.8,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 63.85,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-11-17",
+    "close": 241.75,
+    "volume": 30304400,
+    "rv_30d": 63.54,
+    "rv_90d": 53.56,
+    "iv_premium": -63.34,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 60.54,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-11-18",
+    "close": 228.31,
+    "volume": 33843900,
+    "rv_30d": 65.42,
+    "rv_90d": 53.81,
+    "iv_premium": -65.22,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 52.21,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-11-19",
+    "close": 225.73,
+    "volume": 35256600,
+    "rv_30d": 63.83,
+    "rv_90d": 53.9,
+    "iv_premium": -63.63,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 52.24,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-11-20",
+    "close": 201.2,
+    "volume": 47420700,
+    "rv_30d": 71.56,
+    "rv_90d": 56.96,
+    "iv_premium": -71.36,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 43.06,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-11-21",
+    "close": 207.2,
+    "volume": 36679700,
+    "rv_30d": 69.77,
+    "rv_90d": 56.8,
+    "iv_premium": -69.58,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 41.24,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-11-24",
+    "close": 223.75,
+    "volume": 33052800,
+    "rv_30d": 71.24,
+    "rv_90d": 58.08,
+    "iv_premium": -71.05,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 53.89,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-11-25",
+    "close": 224.35,
+    "volume": 17441600,
+    "rv_30d": 70.45,
+    "rv_90d": 58.0,
+    "iv_premium": -70.25,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 46.15,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-11-26",
+    "close": 230.07,
+    "volume": 17817600,
+    "rv_30d": 70.44,
+    "rv_90d": 57.6,
+    "iv_premium": -70.24,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 48.35,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-11-28",
+    "close": 236.29,
+    "volume": 12914700,
+    "rv_30d": 69.23,
+    "rv_90d": 57.67,
+    "iv_premium": -69.03,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 50.98,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-12-01",
+    "close": 240.26,
+    "volume": 18238200,
+    "rv_30d": 69.26,
+    "rv_90d": 57.67,
+    "iv_premium": -69.07,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 46.43,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-12-02",
+    "close": 239.29,
+    "volume": 18166200,
+    "rv_30d": 69.18,
+    "rv_90d": 57.67,
+    "iv_premium": -68.99,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 50.77,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-12-03",
+    "close": 233.97,
+    "volume": 19188200,
+    "rv_30d": 69.2,
+    "rv_90d": 57.89,
+    "iv_premium": -69.01,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 46.79,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-12-04",
+    "close": 226.46,
+    "volume": 23513900,
+    "rv_30d": 69.72,
+    "rv_90d": 58.3,
+    "iv_premium": -69.52,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 46.83,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-12-05",
+    "close": 237.02,
+    "volume": 21161000,
+    "rv_30d": 69.96,
+    "rv_90d": 58.58,
+    "iv_premium": -69.76,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 47.37,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-12-08",
+    "close": 246.72,
+    "volume": 20495400,
+    "rv_30d": 68.91,
+    "rv_90d": 58.0,
+    "iv_premium": -68.71,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 53.51,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-12-09",
+    "close": 252.21,
+    "volume": 17067100,
+    "rv_30d": 69.09,
+    "rv_90d": 57.45,
+    "iv_premium": -68.9,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 62.04,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-12-10",
+    "close": 263.49,
+    "volume": 21960700,
+    "rv_30d": 70.02,
+    "rv_90d": 57.66,
+    "iv_premium": -69.83,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 66.81,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-12-11",
+    "close": 258.25,
+    "volume": 18867000,
+    "rv_30d": 70.3,
+    "rv_90d": 57.89,
+    "iv_premium": -70.1,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 81.12,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-12-12",
+    "close": 240.94,
+    "volume": 25936900,
+    "rv_30d": 73.23,
+    "rv_90d": 59.28,
+    "iv_premium": -73.03,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 67.84,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-12-15",
+    "close": 237.3,
+    "volume": 27483600,
+    "rv_30d": 73.42,
+    "rv_90d": 59.34,
+    "iv_premium": -73.22,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 58.55,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-12-16",
+    "close": 232.32,
+    "volume": 22577300,
+    "rv_30d": 72.42,
+    "rv_90d": 58.85,
+    "iv_premium": -72.22,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 55.24,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-12-17",
+    "close": 225.33,
+    "volume": 41957100,
+    "rv_30d": 69.82,
+    "rv_90d": 58.93,
+    "iv_premium": -69.62,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 48.4,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-12-18",
+    "close": 248.35,
+    "volume": 65006100,
+    "rv_30d": 71.29,
+    "rv_90d": 60.89,
+    "iv_premium": -71.1,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 56.4,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-12-19",
+    "close": 265.7,
+    "volume": 62312100,
+    "rv_30d": 73.92,
+    "rv_90d": 61.46,
+    "iv_premium": -73.72,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 60.7,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2025-12-22",
+    "close": 276.36,
+    "volume": 30961900,
+    "rv_30d": 74.6,
+    "rv_90d": 61.68,
+    "iv_premium": -74.4,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 63.87,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 1
+  },
+  {
+    "Date": "2025-12-23",
+    "close": 276.04,
+    "volume": 20767600,
+    "rv_30d": 72.52,
+    "rv_90d": 61.24,
+    "iv_premium": -72.32,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 66.31,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 1
+  },
+  {
+    "Date": "2025-12-24",
+    "close": 286.44,
+    "volume": 18592600,
+    "rv_30d": 71.42,
+    "rv_90d": 61.38,
+    "iv_premium": -71.23,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 72.39,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 1
+  },
+  {
+    "Date": "2025-12-26",
+    "close": 284.56,
+    "volume": 17878500,
+    "rv_30d": 71.47,
+    "rv_90d": 61.33,
+    "iv_premium": -71.28,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 68.98,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 1
+  },
+  {
+    "Date": "2025-12-29",
+    "close": 294.25,
+    "volume": 26642900,
+    "rv_30d": 70.96,
+    "rv_90d": 60.87,
+    "iv_premium": -70.76,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 68.57,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 1
+  },
+  {
+    "Date": "2025-12-30",
+    "close": 292.51,
+    "volume": 23056400,
+    "rv_30d": 70.35,
+    "rv_90d": 60.81,
+    "iv_premium": -70.15,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 66.34,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 1
+  },
+  {
+    "Date": "2025-12-31",
+    "close": 285.29,
+    "volume": 17573800,
+    "rv_30d": 70.52,
+    "rv_90d": 61.1,
+    "iv_premium": -70.33,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 59.73,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 1
+  },
+  {
+    "Date": "2026-01-02",
+    "close": 315.29,
+    "volume": 42604300,
+    "rv_30d": 73.55,
+    "rv_90d": 63.0,
+    "iv_premium": -73.35,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 69.4,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-01-05",
+    "close": 312.02,
+    "volume": 34608600,
+    "rv_30d": 73.52,
+    "rv_90d": 63.08,
+    "iv_premium": -73.33,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 77.2,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-01-06",
+    "close": 343.29,
+    "volume": 48732400,
+    "rv_30d": 68.52,
+    "rv_90d": 64.79,
+    "iv_premium": -68.32,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 83.06,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-01-07",
+    "close": 339.41,
+    "volume": 32781100,
+    "rv_30d": 68.98,
+    "rv_90d": 64.79,
+    "iv_premium": -68.78,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 84.45,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-01-08",
+    "close": 326.88,
+    "volume": 33897700,
+    "rv_30d": 68.1,
+    "rv_90d": 65.03,
+    "iv_premium": -67.9,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 83.47,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-01-09",
+    "close": 344.95,
+    "volume": 33387500,
+    "rv_30d": 69.06,
+    "rv_90d": 65.36,
+    "iv_premium": -68.87,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 82.03,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-01-12",
+    "close": 345.72,
+    "volume": 23152600,
+    "rv_30d": 69.1,
+    "rv_90d": 65.36,
+    "iv_premium": -68.9,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 79.45,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-01-13",
+    "close": 337.99,
+    "volume": 23881300,
+    "rv_30d": 69.8,
+    "rv_90d": 65.38,
+    "iv_premium": -69.61,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 73.72,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-01-14",
+    "close": 333.21,
+    "volume": 20277200,
+    "rv_30d": 70.23,
+    "rv_90d": 65.06,
+    "iv_premium": -70.03,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 71.67,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-01-15",
+    "close": 336.49,
+    "volume": 25370200,
+    "rv_30d": 70.07,
+    "rv_90d": 65.04,
+    "iv_premium": -69.87,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 69.87,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-01-16",
+    "close": 362.6,
+    "volume": 47901900,
+    "rv_30d": 71.74,
+    "rv_90d": 65.91,
+    "iv_premium": -71.54,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 75.36,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-01-20",
+    "close": 364.85,
+    "volume": 49744900,
+    "rv_30d": 70.37,
+    "rv_90d": 65.8,
+    "iv_premium": -70.17,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 73.94,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-01-21",
+    "close": 388.95,
+    "volume": 56712800,
+    "rv_30d": 71.3,
+    "rv_90d": 65.56,
+    "iv_premium": -71.11,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 77.92,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-01-22",
+    "close": 397.41,
+    "volume": 39607600,
+    "rv_30d": 70.97,
+    "rv_90d": 65.35,
+    "iv_premium": -70.78,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 82.37,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-01-23",
+    "close": 399.48,
+    "volume": 35404200,
+    "rv_30d": 71.03,
+    "rv_90d": 65.34,
+    "iv_premium": -70.84,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 78.36,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-01-26",
+    "close": 388.93,
+    "volume": 29193900,
+    "rv_30d": 71.56,
+    "rv_90d": 65.64,
+    "iv_premium": -71.36,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 75.6,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-01-27",
+    "close": 410.07,
+    "volume": 36212100,
+    "rv_30d": 71.74,
+    "rv_90d": 66.04,
+    "iv_premium": -71.54,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 72.87,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-01-28",
+    "close": 435.1,
+    "volume": 42725700,
+    "rv_30d": 68.3,
+    "rv_90d": 66.15,
+    "iv_premium": -68.11,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 78.27,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-01-29",
+    "close": 435.61,
+    "volume": 42675700,
+    "rv_30d": 67.72,
+    "rv_90d": 65.68,
+    "iv_premium": -67.52,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 85.15,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-01-30",
+    "close": 414.71,
+    "volume": 51022900,
+    "rv_30d": 69.61,
+    "rv_90d": 66.44,
+    "iv_premium": -69.41,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 73.36,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-02-02",
+    "close": 437.62,
+    "volume": 37771200,
+    "rv_30d": 68.62,
+    "rv_90d": 66.84,
+    "iv_premium": -68.42,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 76.37,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-02-03",
+    "close": 419.26,
+    "volume": 42763300,
+    "rv_30d": 66.91,
+    "rv_90d": 67.11,
+    "iv_premium": -66.71,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 73.31,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-02-04",
+    "close": 379.24,
+    "volume": 58074900,
+    "rv_30d": 72.77,
+    "rv_90d": 69.12,
+    "iv_premium": -72.57,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 62.86,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-02-05",
+    "close": 382.73,
+    "volume": 38899500,
+    "rv_30d": 72.32,
+    "rv_90d": 69.11,
+    "iv_premium": -72.12,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 62.82,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-02-06",
+    "close": 394.52,
+    "volume": 37196000,
+    "rv_30d": 72.41,
+    "rv_90d": 68.99,
+    "iv_premium": -72.21,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 59.49,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-02-09",
+    "close": 383.34,
+    "volume": 31009600,
+    "rv_30d": 72.98,
+    "rv_90d": 69.28,
+    "iv_premium": -72.78,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 55.94,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-02-10",
+    "close": 373.09,
+    "volume": 35433800,
+    "rv_30d": 73.62,
+    "rv_90d": 68.26,
+    "iv_premium": -73.43,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 47.22,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-02-11",
+    "close": 410.17,
+    "volume": 48475000,
+    "rv_30d": 77.79,
+    "rv_90d": 69.92,
+    "iv_premium": -77.59,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 54.25,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-02-12",
+    "close": 413.8,
+    "volume": 45639100,
+    "rv_30d": 77.6,
+    "rv_90d": 69.88,
+    "iv_premium": -77.41,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 54.53,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-02-13",
+    "close": 411.49,
+    "volume": 33807600,
+    "rv_30d": 77.0,
+    "rv_90d": 69.92,
+    "iv_premium": -76.8,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 56.54,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-02-17",
+    "close": 399.61,
+    "volume": 28549500,
+    "rv_30d": 72.8,
+    "rv_90d": 69.94,
+    "iv_premium": -72.61,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 49.15,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-02-18",
+    "close": 420.77,
+    "volume": 32306600,
+    "rv_30d": 73.65,
+    "rv_90d": 69.84,
+    "iv_premium": -73.46,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 48.38,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-02-19",
+    "close": 417.17,
+    "volume": 21651300,
+    "rv_30d": 68.8,
+    "rv_90d": 69.71,
+    "iv_premium": -68.6,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 47.5,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-02-20",
+    "close": 427.99,
+    "volume": 29894900,
+    "rv_30d": 68.76,
+    "rv_90d": 68.88,
+    "iv_premium": -68.57,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 54.53,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-02-23",
+    "close": 420.79,
+    "volume": 25426600,
+    "rv_30d": 67.85,
+    "rv_90d": 68.48,
+    "iv_premium": -67.65,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 47.37,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-02-24",
+    "close": 417.83,
+    "volume": 33389200,
+    "rv_30d": 66.57,
+    "rv_90d": 68.22,
+    "iv_premium": -66.38,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 51.1,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-02-25",
+    "close": 428.82,
+    "volume": 27296300,
+    "rv_30d": 66.78,
+    "rv_90d": 68.22,
+    "iv_premium": -66.58,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 67.52,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-02-26",
+    "close": 415.39,
+    "volume": 35433500,
+    "rv_30d": 67.18,
+    "rv_90d": 68.13,
+    "iv_premium": -66.99,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 61.44,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-02-27",
+    "close": 412.2,
+    "volume": 28653900,
+    "rv_30d": 67.03,
+    "rv_90d": 68.17,
+    "iv_premium": -66.83,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 57.01,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-03-02",
+    "close": 412.5,
+    "volume": 30049200,
+    "rv_30d": 67.06,
+    "rv_90d": 68.14,
+    "iv_premium": -66.86,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 61.76,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-03-03",
+    "close": 379.52,
+    "volume": 39010900,
+    "rv_30d": 68.32,
+    "rv_90d": 69.56,
+    "iv_premium": -68.12,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 53.54,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-03-04",
+    "close": 400.6,
+    "volume": 32644900,
+    "rv_30d": 70.03,
+    "rv_90d": 69.86,
+    "iv_premium": -69.83,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 47.82,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-03-05",
+    "close": 396.88,
+    "volume": 29960100,
+    "rv_30d": 67.59,
+    "rv_90d": 69.7,
+    "iv_premium": -67.4,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 45.28,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-03-06",
+    "close": 370.14,
+    "volume": 34458800,
+    "rv_30d": 70.17,
+    "rv_90d": 70.29,
+    "iv_premium": -69.97,
+    "above_50sma": 0,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 38.6,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-03-09",
+    "close": 389.16,
+    "volume": 35547200,
+    "rv_30d": 71.8,
+    "rv_90d": 70.68,
+    "iv_premium": -71.6,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 48.28,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-03-10",
+    "close": 402.94,
+    "volume": 33745400,
+    "rv_30d": 72.05,
+    "rv_90d": 70.84,
+    "iv_premium": -71.86,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 46.13,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-03-11",
+    "close": 418.51,
+    "volume": 30191400,
+    "rv_30d": 71.2,
+    "rv_90d": 70.99,
+    "iv_premium": -71.01,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 51.6,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-03-12",
+    "close": 405.18,
+    "volume": 31720900,
+    "rv_30d": 69.54,
+    "rv_90d": 71.23,
+    "iv_premium": -69.34,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 45.29,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-03-13",
+    "close": 425.95,
+    "volume": 39261000,
+    "rv_30d": 71.2,
+    "rv_90d": 71.59,
+    "iv_premium": -71.0,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 52.51,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-03-16",
+    "close": 441.61,
+    "volume": 43067600,
+    "rv_30d": 70.45,
+    "rv_90d": 71.42,
+    "iv_premium": -70.25,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 56.55,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-03-17",
+    "close": 461.5,
+    "volume": 43017900,
+    "rv_30d": 69.85,
+    "rv_90d": 70.42,
+    "iv_premium": -69.65,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 58.05,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-03-18",
+    "close": 461.54,
+    "volume": 58973700,
+    "rv_30d": 68.56,
+    "rv_90d": 69.12,
+    "iv_premium": -68.37,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 61.62,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-03-19",
+    "close": 444.08,
+    "volume": 74591900,
+    "rv_30d": 63.11,
+    "rv_90d": 69.55,
+    "iv_premium": -62.91,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 58.18,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-03-20",
+    "close": 422.72,
+    "volume": 64224900,
+    "rv_30d": 65.01,
+    "rv_90d": 70.16,
+    "iv_premium": -64.82,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 53.38,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 1
+  },
+  {
+    "Date": "2026-03-23",
+    "close": 404.18,
+    "volume": 54807300,
+    "rv_30d": 65.95,
+    "rv_90d": 70.0,
+    "iv_premium": -65.75,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 56.86,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 1
+  },
+  {
+    "Date": "2026-03-24",
+    "close": 395.36,
+    "volume": 44975100,
+    "rv_30d": 65.71,
+    "rv_90d": 69.56,
+    "iv_premium": -65.52,
+    "above_50sma": 0,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 49.85,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 1
+  },
+  {
+    "Date": "2026-03-25",
+    "close": 381.93,
+    "volume": 55328700,
+    "rv_30d": 66.02,
+    "rv_90d": 69.87,
+    "iv_premium": -65.83,
+    "above_50sma": 0,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 47.59,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 1
+  },
+  {
+    "Date": "2026-03-26",
+    "close": 355.31,
+    "volume": 54515900,
+    "rv_30d": 62.35,
+    "rv_90d": 70.72,
+    "iv_premium": -62.15,
+    "above_50sma": 0,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 47.38,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 1
+  },
+  {
+    "Date": "2026-03-27",
+    "close": 357.07,
+    "volume": 45806700,
+    "rv_30d": 62.29,
+    "rv_90d": 70.45,
+    "iv_premium": -62.09,
+    "above_50sma": 0,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 42.49,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 1
+  },
+  {
+    "Date": "2026-03-30",
+    "close": 321.8,
+    "volume": 73833200,
+    "rv_30d": 68.06,
+    "rv_90d": 72.46,
+    "iv_premium": -67.87,
+    "above_50sma": 0,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 31.41,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 1
+  },
+  {
+    "Date": "2026-03-31",
+    "close": 337.84,
+    "volume": 73551800,
+    "rv_30d": 69.7,
+    "rv_90d": 72.14,
+    "iv_premium": -69.5,
+    "above_50sma": 0,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 32.75,
+    "high_vol_regime": 0.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 1
+  },
+  {
+    "Date": "2026-04-01",
+    "close": 367.85,
+    "volume": 74429800,
+    "rv_30d": 72.97,
+    "rv_90d": 73.42,
+    "iv_premium": -72.77,
+    "above_50sma": 0,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 43.88,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-04-02",
+    "close": 366.24,
+    "volume": 51498700,
+    "rv_30d": 72.96,
+    "rv_90d": 70.81,
+    "iv_premium": -72.76,
+    "above_50sma": 0,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 38.62,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-04-06",
+    "close": 377.76,
+    "volume": 41414900,
+    "rv_30d": 73.17,
+    "rv_90d": 70.83,
+    "iv_premium": -72.97,
+    "above_50sma": 0,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 38.05,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-04-07",
+    "close": 377.58,
+    "volume": 40224100,
+    "rv_30d": 73.05,
+    "rv_90d": 69.78,
+    "iv_premium": -72.86,
+    "above_50sma": 0,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 32.8,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-04-08",
+    "close": 406.73,
+    "volume": 49216600,
+    "rv_30d": 76.6,
+    "rv_90d": 70.76,
+    "iv_premium": -76.4,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 41.28,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-04-09",
+    "close": 421.51,
+    "volume": 43101000,
+    "rv_30d": 76.95,
+    "rv_90d": 70.86,
+    "iv_premium": -76.75,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 47.34,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-04-10",
+    "close": 420.59,
+    "volume": 36377600,
+    "rv_30d": 76.36,
+    "rv_90d": 70.81,
+    "iv_premium": -76.17,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 51.19,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-04-13",
+    "close": 426.56,
+    "volume": 37015800,
+    "rv_30d": 76.4,
+    "rv_90d": 70.8,
+    "iv_premium": -76.2,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 56.69,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-04-14",
+    "close": 465.66,
+    "volume": 52534900,
+    "rv_30d": 80.66,
+    "rv_90d": 72.16,
+    "iv_premium": -80.47,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 65.31,
+    "high_vol_regime": 1.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-04-15",
+    "close": 456.23,
+    "volume": 40370100,
+    "rv_30d": 76.95,
+    "rv_90d": 72.14,
+    "iv_premium": -76.75,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 66.83,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-04-16",
+    "close": 457.23,
+    "volume": 33626400,
+    "rv_30d": 75.59,
+    "rv_90d": 71.82,
+    "iv_premium": -75.39,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 75.88,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-04-17",
+    "close": 455.07,
+    "volume": 33405000,
+    "rv_30d": 75.52,
+    "rv_90d": 71.57,
+    "iv_premium": -75.32,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 74.97,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-04-20",
+    "close": 448.42,
+    "volume": 32013600,
+    "rv_30d": 72.58,
+    "rv_90d": 71.45,
+    "iv_premium": -72.38,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 89.36,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-04-21",
+    "close": 449.38,
+    "volume": 27734000,
+    "rv_30d": 71.38,
+    "rv_90d": 71.41,
+    "iv_premium": -71.18,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 88.06,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-04-22",
+    "close": 487.48,
+    "volume": 45998100,
+    "rv_30d": 74.52,
+    "rv_90d": 72.32,
+    "iv_premium": -74.33,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 87.94,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-04-23",
+    "close": 481.72,
+    "volume": 38178000,
+    "rv_30d": 74.12,
+    "rv_90d": 72.24,
+    "iv_premium": -73.93,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 86.28,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-04-24",
+    "close": 496.72,
+    "volume": 35379600,
+    "rv_30d": 73.59,
+    "rv_90d": 71.22,
+    "iv_premium": -73.39,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 86.27,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-04-27",
+    "close": 524.56,
+    "volume": 41298800,
+    "rv_30d": 73.85,
+    "rv_90d": 71.53,
+    "iv_premium": -73.65,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 88.07,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-04-28",
+    "close": 504.29,
+    "volume": 44816600,
+    "rv_30d": 74.53,
+    "rv_90d": 71.8,
+    "iv_premium": -74.33,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 77.55,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-04-29",
+    "close": 518.46,
+    "volume": 36248500,
+    "rv_30d": 73.91,
+    "rv_90d": 71.55,
+    "iv_premium": -73.71,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 77.09,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-04-30",
+    "close": 517.16,
+    "volume": 36554400,
+    "rv_30d": 73.93,
+    "rv_90d": 69.87,
+    "iv_premium": -73.73,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 77.02,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-05-01",
+    "close": 542.21,
+    "volume": 40215300,
+    "rv_30d": 73.83,
+    "rv_90d": 69.43,
+    "iv_premium": -73.63,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 78.82,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-05-04",
+    "close": 576.45,
+    "volume": 46043700,
+    "rv_30d": 73.56,
+    "rv_90d": 69.83,
+    "iv_premium": -73.36,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 77.35,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-05-05",
+    "close": 640.2,
+    "volume": 64268500,
+    "rv_30d": 77.01,
+    "rv_90d": 71.84,
+    "iv_premium": -76.81,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 85.51,
+    "high_vol_regime": 1.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-05-06",
+    "close": 666.59,
+    "volume": 55725800,
+    "rv_30d": 76.45,
+    "rv_90d": 71.88,
+    "iv_premium": -76.25,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 86.56,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-05-07",
+    "close": 646.63,
+    "volume": 47527500,
+    "rv_30d": 76.21,
+    "rv_90d": 72.14,
+    "iv_premium": -76.02,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 82.68,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-05-08",
+    "close": 746.81,
+    "volume": 65130900,
+    "rv_30d": 81.19,
+    "rv_90d": 76.01,
+    "iv_premium": -80.99,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 88.21,
+    "high_vol_regime": 1.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-05-11",
+    "close": 795.33,
+    "volume": 70972900,
+    "rv_30d": 81.68,
+    "rv_90d": 76.47,
+    "iv_premium": -81.48,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 89.18,
+    "high_vol_regime": 1.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-05-12",
+    "close": 766.58,
+    "volume": 73743000,
+    "rv_30d": 74.95,
+    "rv_90d": 76.65,
+    "iv_premium": -74.76,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 83.41,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-05-13",
+    "close": 803.63,
+    "volume": 54875100,
+    "rv_30d": 74.92,
+    "rv_90d": 75.28,
+    "iv_premium": -74.72,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 85.78,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-05-14",
+    "close": 776.01,
+    "volume": 42142700,
+    "rv_30d": 75.07,
+    "rv_90d": 75.58,
+    "iv_premium": -74.87,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 81.3,
+    "high_vol_regime": 0.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-05-15",
+    "close": 724.66,
+    "volume": 48519000,
+    "rv_30d": 79.28,
+    "rv_90d": 75.17,
+    "iv_premium": -79.08,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 72.93,
+    "high_vol_regime": 1.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-05-18",
+    "close": 681.54,
+    "volume": 60042500,
+    "rv_30d": 82.85,
+    "rv_90d": 75.97,
+    "iv_premium": -82.66,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 71.0,
+    "high_vol_regime": 1.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-05-19",
+    "close": 698.74,
+    "volume": 61792100,
+    "rv_30d": 82.6,
+    "rv_90d": 75.62,
+    "iv_premium": -82.41,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 70.89,
+    "high_vol_regime": 1.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-05-20",
+    "close": 731.99,
+    "volume": 48827400,
+    "rv_30d": 81.32,
+    "rv_90d": 75.5,
+    "iv_premium": -81.12,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 72.77,
+    "high_vol_regime": 1.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-05-21",
+    "close": 762.1,
+    "volume": 42461500,
+    "rv_30d": 81.41,
+    "rv_90d": 75.68,
+    "iv_premium": -81.21,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 72.53,
+    "high_vol_regime": 1.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-05-22",
+    "close": 751.0,
+    "volume": 36002900,
+    "rv_30d": 81.8,
+    "rv_90d": 75.59,
+    "iv_premium": -81.6,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 68.93,
+    "high_vol_regime": 1.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-05-26",
+    "close": 895.88,
+    "volume": 76560800,
+    "rv_30d": 95.76,
+    "rv_90d": 81.43,
+    "iv_premium": -95.57,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 71.91,
+    "high_vol_regime": 1.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-05-27",
+    "close": 928.41,
+    "volume": 72295700,
+    "rv_30d": 93.82,
+    "rv_90d": 81.53,
+    "iv_premium": -93.63,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 71.75,
+    "high_vol_regime": 1.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-05-28",
+    "close": 923.52,
+    "volume": 49694300,
+    "rv_30d": 93.3,
+    "rv_90d": 80.84,
+    "iv_premium": -93.1,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 73.89,
+    "high_vol_regime": 1.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-05-29",
+    "close": 971.0,
+    "volume": 60498600,
+    "rv_30d": 93.32,
+    "rv_90d": 81.1,
+    "iv_premium": -93.13,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 70.16,
+    "high_vol_regime": 1.0,
+    "earnings_month": 0,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-06-01",
+    "close": 1035.5,
+    "volume": 46552100,
+    "rv_30d": 93.5,
+    "rv_90d": 81.11,
+    "iv_premium": -93.3,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 70.22,
+    "high_vol_regime": 1.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-06-02",
+    "close": 1064.1,
+    "volume": 47555400,
+    "rv_30d": 92.57,
+    "rv_90d": 81.14,
+    "iv_premium": -92.37,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 74.91,
+    "high_vol_regime": 1.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-06-03",
+    "close": 1079.57,
+    "volume": 40324200,
+    "rv_30d": 92.31,
+    "rv_90d": 81.13,
+    "iv_premium": -92.11,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 73.67,
+    "high_vol_regime": 1.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-06-04",
+    "close": 996.0,
+    "volume": 54917200,
+    "rv_30d": 96.02,
+    "rv_90d": 82.26,
+    "iv_premium": -95.82,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 69.3,
+    "high_vol_regime": 1.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-06-05",
+    "close": 864.01,
+    "volume": 77250500,
+    "rv_30d": 105.98,
+    "rv_90d": 85.41,
+    "iv_premium": -105.79,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 63.5,
+    "high_vol_regime": 1.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 0
+  },
+  {
+    "Date": "2026-06-08",
+    "close": 949.28,
+    "volume": 54097800,
+    "rv_30d": 108.29,
+    "rv_90d": 86.27,
+    "iv_premium": -108.09,
+    "above_50sma": 1,
+    "above_200sma": 1,
+    "golden_cross": 0,
+    "rsi": 72.37,
+    "high_vol_regime": 1.0,
+    "earnings_month": 1,
+    "earnings_lastweek": 0
+  }
+];
+
+
+
+// ── Chart defaults ────────────────────────────────────────────────────────────
+const CD = {
+  responsive: true, maintainAspectRatio: false,
+  plugins: {
+    legend: { display: false },
+    tooltip: {
+      mode: 'index', intersect: false,
+      backgroundColor: '#141720', borderColor: '#2a3350', borderWidth: 1,
+      titleColor: '#e2e8f0', bodyColor: '#7c8aa0', padding: 10,
+    },
+    zoom: {
+      zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'x' },
+      pan:  { enabled: true, mode: 'x' },
+    },
+  },
+  scales: {
+    x: { grid: { color: '#1e2438' }, ticks: { color: '#3d4a60', font: { size: 10 }, maxTicksLimit: 12 } },
+    y: { grid: { color: '#1e2438' }, ticks: { color: '#3d4a60', font: { size: 10 } } },
+  },
+  animation: { duration: 600, easing: 'easeInOutQuart' },
+};
+
+function makeDs(data, color, fill=false, radius=0, width=2) {
+  return { data, borderColor: color, backgroundColor: color+'22',
+           fill, pointRadius: radius, pointHoverRadius: 5,
+           borderWidth: width, tension: 0.3 };
+}
+
+// ── Compute rolling SMA ────────────────────────────────────────────────────────
+function sma(arr, n) {
+  return arr.map((_, i) => i < n-1 ? null : arr.slice(i-n+1, i+1).reduce((a,b) => a+b) / n);
+}
+
+// ── Main init ─────────────────────────────────────────────────────────────────
+function init(data) {
+  const dates  = data.map(d => d.Date);
+  const closes = data.map(d => d.close);
+  const vols   = data.map(d => d.volume);
+  const rv30   = data.map(d => d.rv_30d);
+  const rv90   = data.map(d => d.rv_90d);
+  const rsi    = data.map(d => d.rsi);
+  const above50 = data.map(d => d.above_50sma);
+  const above200= data.map(d => d.above_200sma);
+  const highVol = data.map(d => d.high_vol_regime);
+  const earnMon = data.map(d => d.earnings_month);
+  const earnLW  = data.map(d => d.earnings_lastweek);
+
+  const lastClose = closes[closes.length - 1];
+  const sma50arr  = sma(closes, 50);
+  const sma200arr = sma(closes, 200);
+  const volAvg20  = sma(vols, 20);
+
+  // ── Header ────────────────────────────────────────────────────────────────────
+  document.getElementById('spotPrice').textContent = `$${lastClose.toFixed(2)}`;
+  document.getElementById('optSpot').textContent   = `$${lastClose.toFixed(2)}`;
+
+  const lastRow = data[data.length - 1];
+  if (!lastRow.above_200sma) {
+    document.getElementById('trendChip').textContent = '▼ Below 200 SMA';
+    document.getElementById('trendChip').className   = 'chip chip-red';
+  }
+
+  // ── KPI Cards ─────────────────────────────────────────────────────────────────
+  const ytdStartIdx = data.findIndex(d => d.Date.startsWith('2026'));
+  const ytdStart    = ytdStartIdx >= 0 ? closes[ytdStartIdx] : closes[0];
+  const ytdRet      = ((lastClose - ytdStart) / ytdStart * 100).toFixed(1);
+  const max1y       = Math.max(...closes.slice(-252));
+  const min1y       = Math.min(...closes.slice(-252));
+  const pctOfRange  = ((lastClose - min1y) / (max1y - min1y) * 100).toFixed(0);
+
+  const kpis = [
+    { label: 'Current Price',     value: `$${lastClose.toFixed(2)}`, sub: 'Last close',           color: 'var(--mu)' },
+    { label: 'YTD Return',        value: `${ytdRet > 0 ? '+':''}${ytdRet}%`, sub: 'Jan 2026 basis', color: ytdRet > 0 ? 'var(--green)' : 'var(--red)' },
+    { label: '52-Wk High',        value: `$${max1y.toFixed(2)}`,     sub: 'Rolling 252 days',      color: 'var(--text)' },
+    { label: '52-Wk Low',         value: `$${min1y.toFixed(2)}`,     sub: 'Rolling 252 days',      color: 'var(--text)' },
+    { label: '52-Wk Position',    value: `${pctOfRange}th`,          sub: 'Percentile of range',   color: 'var(--cyan)' },
+    { label: '30-Day RV',         value: `${rv30[rv30.length-1].toFixed(1)}%`, sub: 'Annualized', color: 'var(--yellow)' },
+  ];
+
+  const kpiEl = document.getElementById('kpiRow');
+  kpis.forEach(k => {
+    kpiEl.innerHTML += `
+      <div class="kpi-card" style="--kpi-color:${k.color}">
+        <div class="kpi-label">${k.label}</div>
+        <div class="kpi-value">${k.value}</div>
+        <div class="kpi-sub">${k.sub}</div>
+      </div>`;
+  });
+
+  // ── Price Chart ───────────────────────────────────────────────────────────────
+  // Highlight earnings months as background zones
+  const earningsAnnotations = {};
+  let inEarnings = false, startIdx = 0;
+  data.forEach((d, i) => {
+    if (d.earnings_month && !inEarnings) { inEarnings = true; startIdx = i; }
+    if (!d.earnings_month && inEarnings) {
+      earningsAnnotations[`ea${i}`] = {
+        type: 'box', xMin: startIdx, xMax: i,
+        backgroundColor: 'rgba(99,102,241,0.06)',
+        borderColor: 'rgba(99,102,241,0.15)', borderWidth: 1,
+      };
+      inEarnings = false;
+    }
+  });
+
+  new Chart(document.getElementById('priceChart').getContext('2d'), {
+    type: 'line',
+    data: {
+      labels: dates,
+      datasets: [
+        { ...makeDs(closes, '#6366f1', true, 0, 2), label: 'Price', backgroundColor: 'rgba(99,102,241,0.08)' },
+        { ...makeDs(sma50arr,  '#f59e0b', false, 0, 1.5), label: '50 SMA',  borderDash: [] },
+        { ...makeDs(sma200arr, '#10b981', false, 0, 1.5), label: '200 SMA', borderDash: [4,3] },
+      ],
+    },
+    options: {
+      ...CD,
+      plugins: {
+        ...CD.plugins,
+        legend: { display: true, labels: { color: '#7c8aa0', font: { size: 11 }, boxWidth: 12, padding: 16 } },
+        annotation: { annotations: earningsAnnotations },
+        tooltip: {
+          ...CD.plugins.tooltip,
+          callbacks: { label: ctx => ` ${ctx.dataset.label}: $${ctx.raw?.toFixed(2) ?? 'N/A'}` }
+        },
+      },
+      scales: {
+        x: { ...CD.scales.x },
+        y: { ...CD.scales.y, ticks: { ...CD.scales.y.ticks, callback: v => '$' + v.toFixed(0) } },
+      },
+    },
+  });
+
+  // ── RSI Chart ─────────────────────────────────────────────────────────────────
+  new Chart(document.getElementById('rsiChart').getContext('2d'), {
+    type: 'line',
+    data: {
+      labels: dates,
+      datasets: [{ ...makeDs(rsi, '#8b5cf6', true, 0, 2), label: 'RSI(14)' }],
+    },
+    options: {
+      ...CD,
+      plugins: {
+        ...CD.plugins,
+        annotation: {
+          annotations: {
+            ob: { type: 'line', yMin: 70, yMax: 70, borderColor: 'rgba(244,63,94,.5)',   borderWidth: 1, borderDash: [4,3], label: { display: true, content: 'Overbought', color: '#f43f5e', font: { size: 9 } } },
+            os: { type: 'line', yMin: 30, yMax: 30, borderColor: 'rgba(16,185,129,.5)',  borderWidth: 1, borderDash: [4,3], label: { display: true, content: 'Oversold',   color: '#10b981', font: { size: 9 } } },
+          }
+        }
+      },
+      scales: {
+        x: CD.scales.x,
+        y: { ...CD.scales.y, min: 0, max: 100 },
+      },
+    },
+  });
+
+  // ── Volatility Chart ──────────────────────────────────────────────────────────
+  new Chart(document.getElementById('volChart').getContext('2d'), {
+    type: 'line',
+    data: {
+      labels: dates,
+      datasets: [
+        { ...makeDs(rv30, '#f59e0b', false, 0, 2), label: '30d RV' },
+        { ...makeDs(rv90, '#94a3b8', false, 0, 1.5), label: '90d RV', borderDash: [4,3] },
+      ],
+    },
+    options: {
+      ...CD,
+      plugins: {
+        ...CD.plugins,
+        legend: { display: true, labels: { color: '#7c8aa0', font: { size: 10 }, boxWidth: 10, padding: 10 } },
+        annotation: {
+          annotations: {
+            vl: { type: 'line', yMin: 80, yMax: 80, borderColor: 'rgba(244,63,94,.4)', borderWidth: 1, borderDash: [4,3] }
+          }
+        }
+      },
+      scales: {
+        x: CD.scales.x,
+        y: { ...CD.scales.y, ticks: { ...CD.scales.y.ticks, callback: v => v + '%' } },
+      },
+    },
+  });
+
+  // ── Volume Chart ──────────────────────────────────────────────────────────────
+  new Chart(document.getElementById('volumeChart').getContext('2d'), {
+    type: 'bar',
+    data: {
+      labels: dates,
+      datasets: [
+        { label: 'Volume', data: vols, backgroundColor: 'rgba(99,102,241,0.5)', borderRadius: 1 },
+        { ...makeDs(volAvg20, '#f59e0b', false, 0, 1.5), label: '20d Avg', type: 'line' },
+      ],
+    },
+    options: {
+      ...CD,
+      plugins: {
+        ...CD.plugins,
+        legend: { display: true, labels: { color: '#7c8aa0', font: { size: 10 }, boxWidth: 10 } },
+        tooltip: { ...CD.plugins.tooltip, callbacks: { label: ctx => ` ${ctx.dataset.label}: ${(ctx.raw/1e6).toFixed(1)}M` } },
+      },
+      scales: {
+        x: CD.scales.x,
+        y: { ...CD.scales.y, ticks: { ...CD.scales.y.ticks, callback: v => (v/1e6).toFixed(0) + 'M' } },
+      },
+    },
+  });
+
+  // ── Signal Grid ───────────────────────────────────────────────────────────────
+  const L = data.length - 1;
+  const currentSignals = [
+    { name: 'Above 50 SMA',       val: data[L].above_50sma,      labels: ['YES','NO'],   colors: ['pill-green','pill-red'] },
+    { name: 'Above 200 SMA',      val: data[L].above_200sma,     labels: ['YES','NO'],   colors: ['pill-green','pill-red'] },
+    { name: 'Golden Cross',       val: data[L].golden_cross,     labels: ['YES','NO'],   colors: ['pill-green','pill-gray'] },
+    { name: 'High Vol Regime',    val: data[L].high_vol_regime,  labels: ['YES','NO'],   colors: ['pill-yellow','pill-gray'] },
+    { name: 'Earnings Month',     val: data[L].earnings_month,   labels: ['YES','NO'],   colors: ['pill-purple','pill-gray'] },
+    { name: 'Earnings Last Week', val: data[L].earnings_lastweek,labels: ['YES','NO'],   colors: ['pill-red','pill-gray'] },
+    { name: 'RSI (14)',           val: null, custom: rsi[L].toFixed(1), color: rsi[L] > 70 ? 'pill-red' : rsi[L] < 30 ? 'pill-green' : 'pill-gray' },
+    { name: '30d Realized Vol',   val: null, custom: rv30[L].toFixed(1) + '%', color: rv30[L] > 80 ? 'pill-yellow' : 'pill-gray' },
+  ];
+
+  const sg = document.getElementById('signalGrid');
+  currentSignals.forEach(s => {
+    let pill;
+    if (s.custom !== undefined) {
+      pill = `<span class="signal-pill ${s.color}">${s.custom}</span>`;
+    } else {
+      const idx = s.val ? 0 : 1;
+      pill = `<span class="signal-pill ${s.colors[idx]}">${s.labels[idx]}</span>`;
+    }
+    sg.innerHTML += `<div class="signal-row"><span class="signal-name">${s.name}</span>${pill}</div>`;
+  });
+
+  // ── Signal History Chart ────────────────────────────────────────────────────
+  new Chart(document.getElementById('signalHistChart').getContext('2d'), {
+    type: 'line',
+    data: {
+      labels: dates,
+      datasets: [
+        { ...makeDs(above50,  '#f59e0b', false, 0, 2), label: 'Above 50 SMA' },
+        { ...makeDs(above200, '#10b981', false, 0, 2), label: 'Above 200 SMA' },
+        { ...makeDs(highVol,  '#f43f5e', false, 0, 2), label: 'High Vol' },
+        { ...makeDs(earnMon,  '#8b5cf6', false, 0, 2), label: 'Earnings Month' },
+      ],
+    },
+    options: {
+      ...CD,
+      plugins: {
+        ...CD.plugins,
+        legend: { display: true, labels: { color: '#7c8aa0', font: { size: 10 }, boxWidth: 10, padding: 8 } },
+      },
+      scales: {
+        x: CD.scales.x,
+        y: { ...CD.scales.y, min: -0.1, max: 1.3, ticks: { ...CD.scales.y.ticks, callback: v => v == 1 ? 'ON' : v == 0 ? 'OFF' : '' } },
+      },
+    },
+  });
+
+  // ── Return Bar Chart ──────────────────────────────────────────────────────────
+  const bh_mu = 576.2; // from options analysis run
+  const agentReturns = {
+    'A2C':   -3.35,
+    'DDPG':   0.01,
+    'PPO':   -5.35,
+    'TD3':   -8.84,
+    'SAC':   -1.48,
+    'Wheel':  55.0,
+    'B&H MU': bh_mu,
+  };
+
+  const barColors = ['#6366f1','#10b981','#f59e0b','#ef4444','#06b6d4','#f97316','#94a3b8'];
+  new Chart(document.getElementById('returnBarChart').getContext('2d'), {
+    type: 'bar',
+    data: {
+      labels: Object.keys(agentReturns),
+      datasets: [{
+        label: 'Return %',
+        data: Object.values(agentReturns),
+        backgroundColor: barColors.map((c, i) => {
+          const v = Object.values(agentReturns)[i];
+          return v >= 0 ? c + 'cc' : '#f43f5e44';
+        }),
+        borderColor: barColors,
+        borderWidth: 1, borderRadius: 6,
+      }],
+    },
+    options: {
+      ...CD,
+      plugins: {
+        ...CD.plugins,
+        tooltip: { ...CD.plugins.tooltip, callbacks: { label: ctx => ` ${ctx.raw > 0 ? '+' : ''}${ctx.raw}%` } },
+        annotation: {
+          annotations: {
+            zero: { type: 'line', yMin: 0, yMax: 0, borderColor: 'rgba(255,255,255,.15)', borderWidth: 1 }
+          }
+        }
+      },
+      scales: {
+        x: CD.scales.x,
+        y: { ...CD.scales.y, ticks: { ...CD.scales.y.ticks, callback: v => v + '%' } },
+      },
+    },
+  });
+  initMultiStrategy();
+}
+
+// ── 20-Strategy Comparative Study ──────────────────────────────────────────
+const MULTI_STRATEGY_SUMMARY = {
+  "S1":  { "name": "S1: Buy & Hold MU (Benchmark)", "type": "Benchmark", "return_pct": 304.1, "sharpe": 4.073, "max_dd": -30.3, "beat_bh": "No" },
+  "S2":  { "name": "S2: Buy & Hold MUU (Benchmark)", "type": "Leveraged", "return_pct": 1128.6, "sharpe": 4.073, "max_dd": -52.6, "beat_bh": "Yes" },
+  "S3":  { "name": "S3: RSI Mean Rev Long (MU)", "type": "Rule-Based", "return_pct": 21.1, "sharpe": 2.246, "max_dd": -2.0, "beat_bh": "No" },
+  "S4":  { "name": "S4: RSI Mean Rev Long (MUU)", "type": "Rule-Based", "return_pct": 44.6, "sharpe": 2.246, "max_dd": -4.1, "beat_bh": "No" },
+  "S5":  { "name": "S5: RSI Mean Rev Short (MU)", "type": "Rule-Based", "return_pct": -75.9, "sharpe": -3.457, "max_dd": -78.8, "beat_bh": "No" },
+  "S6":  { "name": "S6: RSI Mean Rev Short (MUU)", "type": "Rule-Based", "return_pct": -95.9, "sharpe": -3.457, "max_dd": -96.8, "beat_bh": "No" },
+  "S7":  { "name": "S7: SMA 50/200 Golden Cross (MU)", "type": "Rule-Based", "return_pct": 304.1, "sharpe": 4.073, "max_dd": -30.3, "beat_bh": "No" },
+  "S8":  { "name": "S8: SMA 50/200 Golden Cross (MUU)", "type": "Rule-Based", "return_pct": 1128.6, "sharpe": 4.073, "max_dd": -52.6, "beat_bh": "Yes" },
+  "S9":  { "name": "S9: MACD Line Crossover (MU)", "type": "Rule-Based", "return_pct": 121.3, "sharpe": 3.036, "max_dd": -19.6, "beat_bh": "No" },
+  "S10": { "name": "S10: MACD Line Crossover (MUU)", "type": "Rule-Based", "return_pct": 316.2, "sharpe": 3.036, "max_dd": -36.8, "beat_bh": "Yes" },
+  "S11": { "name": "S11: Bollinger Bands Rev (MU)", "type": "Rule-Based", "return_pct": 123.3, "sharpe": 5.072, "max_dd": -3.9, "beat_bh": "No" },
+  "S12": { "name": "S12: Bollinger Bands Rev (MUU)", "type": "Rule-Based", "return_pct": 372.7, "sharpe": 5.072, "max_dd": -7.7, "beat_bh": "Yes" },
+  "S13": { "name": "S13: Volatility Breakout (MU)", "type": "Rule-Based", "return_pct": 411.9, "sharpe": 5.469, "max_dd": -14.5, "beat_bh": "Yes" },
+  "S14": { "name": "S14: Volatility Breakout (MUU)", "type": "Rule-Based", "return_pct": 2049.7, "sharpe": 5.469, "max_dd": -27.4, "beat_bh": "Yes" },
+  "S15": { "name": "S15: Earnings Proximity Play (MU)", "type": "Earnings", "return_pct": -6.0, "sharpe": -0.291, "max_dd": -23.0, "beat_bh": "No" },
+  "S16": { "name": "S16: Earnings Proximity Play (MUU)", "type": "Earnings", "return_pct": -15.2, "sharpe": -0.291, "max_dd": -41.5, "beat_bh": "No" },
+  "S17": { "name": "S17: Options Wheel Strategy (MU)", "type": "Options", "return_pct": 126.8, "sharpe": 3.648, "max_dd": -9.9, "beat_bh": "No" },
+  "S18": { "name": "S18: Options Wheel Strategy (MUU)", "type": "Options", "return_pct": 548.2, "sharpe": 4.237, "max_dd": -19.8, "beat_bh": "Yes" },
+  "S19": { "name": "S19: FinRL PPO Agent (MU)", "type": "RL Agent", "return_pct": 166.7, "sharpe": 4.220, "max_dd": -20.8, "beat_bh": "No" },
+  "S20": { "name": "S20: FinRL SAC Agent (MU)", "type": "RL Agent", "return_pct": 0.0, "sharpe": 0.000, "max_dd": 0.0, "beat_bh": "No" }
+};
+
+let multiStrategyData = null;
+let multiStrategyChart = null;
+let currentSortCol = 'return_pct';
+let currentSortAsc = false;
+
+function initMultiStrategy() {
+  sortAndPopulateLeaderboard();
+  populateStrategyToggles();
+
+  fetch('results/mu_multi_strategy_results.json')
+    .then(r => r.json())
+    .then(data => {
+      console.log('Loaded full multi-strategy curves');
+      multiStrategyData = data;
+      // Mutate MULTI_STRATEGY_SUMMARY with the actual loaded metrics
+      Object.keys(data).forEach(key => {
+        if (MULTI_STRATEGY_SUMMARY[key]) {
+          MULTI_STRATEGY_SUMMARY[key].return_pct = data[key].return_pct;
+          MULTI_STRATEGY_SUMMARY[key].sharpe = data[key].sharpe;
+          MULTI_STRATEGY_SUMMARY[key].max_dd = data[key].max_dd;
+          MULTI_STRATEGY_SUMMARY[key].beat_bh = data[key].beat_bh;
+        }
+      });
+      // Re-populate and sort leaderboard and toggles with actual data
+      sortAndPopulateLeaderboard();
+      populateStrategyToggles();
+      renderMultiStrategyChart();
+    })
+    .catch(err => {
+      console.warn('Failed to load full multi-strategy curves (CORS). Rendering static fallback.');
+      multiStrategyData = {};
+      const dates = SAMPLE_DATA.map(d => d.Date);
+      Object.keys(MULTI_STRATEGY_SUMMARY).forEach(key => {
+        const sum = MULTI_STRATEGY_SUMMARY[key];
+        const values = Array.from({length: dates.length}, (_, i) => {
+          const finalVal = 100000 * (1 + sum.return_pct / 100);
+          return 100000 + (finalVal - 100000) * (i / (dates.length - 1));
+        });
+        multiStrategyData[key] = {
+          name: sum.name,
+          dates: dates,
+          portfolio_values: values,
+          return_pct: sum.return_pct,
+          sharpe: sum.sharpe,
+          max_dd: sum.max_dd,
+          beat_bh: sum.beat_bh
+        };
+      });
+      renderMultiStrategyChart();
+    });
+}
+
+function populateStrategyToggles() {
+  const container = document.getElementById('strategyToggles');
+  container.innerHTML = '';
+  const defaultChecked = ['S1', 'S2', 'S8', 'S13', 'S14'];
+  
+  Object.keys(MULTI_STRATEGY_SUMMARY).forEach(key => {
+    const sum = MULTI_STRATEGY_SUMMARY[key];
+    const isChecked = defaultChecked.includes(key) ? 'checked' : '';
+    
+    let color = 'var(--text2)';
+    if (sum.type === 'Benchmark') color = 'var(--mu)';
+    else if (sum.type === 'Leveraged') color = 'var(--cyan)';
+    else if (sum.type === 'Options') color = 'var(--green)';
+    else if (sum.type === 'RL Agent') color = 'var(--purple)';
+    
+    container.innerHTML += `
+      <label style="display:flex;align-items:center;gap:10px;font-size:12px;cursor:pointer;padding:6px 10px;border-radius:6px;background:var(--bg3);border:1px solid var(--border);transition:border-color 0.15s">
+        <input type="checkbox" value="${key}" ${isChecked} onchange="renderMultiStrategyChart()" style="cursor:pointer" />
+        <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${color}"></span>
+        <span style="flex:1">${sum.name.split(':')[0]}</span>
+        <span style="font-family:'JetBrains Mono',monospace;font-weight:600;color:${sum.return_pct >= 0 ? 'var(--green)':'var(--red)'}">${sum.return_pct >= 0 ? '+':''}${sum.return_pct.toFixed(1)}%</span>
+      </label>
+    `;
+  });
+}
+
+function renderMultiStrategyChart() {
+  if (!multiStrategyData) return;
+  const checkedBoxes = Array.from(document.querySelectorAll('#strategyToggles input:checked')).map(cb => cb.value);
+  
+  if (checkedBoxes.length === 0) {
+    if (multiStrategyChart) multiStrategyChart.destroy();
+    return;
+  }
+  
+  if (checkedBoxes.length > 6) {
+    alert('Please select a maximum of 6 strategies to plot.');
+    event.target.checked = false;
+    return;
+  }
+  
+  const dates = multiStrategyData[checkedBoxes[0]].dates;
+  const datasets = checkedBoxes.map((key, idx) => {
+    const sData = multiStrategyData[key];
+    const colors = ['#6366f1', '#3b82f6', '#10b981', '#8b5cf6', '#f59e0b', '#06b6d4'];
+    const color = colors[idx % colors.length];
+    
+    return {
+      label: sData.name.split(':')[0],
+      data: sData.portfolio_values,
+      borderColor: color,
+      backgroundColor: color + '08',
+      borderWidth: 2,
+      pointRadius: 0,
+      pointHoverRadius: 4,
+      tension: 0.1,
+      fill: false
+    };
+  });
+  
+  const ctx = document.getElementById('multiStrategyChart').getContext('2d');
+  if (multiStrategyChart) {
+    multiStrategyChart.destroy();
+  }
+  
+  multiStrategyChart = new Chart(ctx, {
+    type: 'line',
+    data: { labels: dates, datasets: datasets },
+    options: {
+      ...CD,
+      plugins: {
+        ...CD.plugins,
+        legend: { display: true, labels: { color: '#7c8aa0', font: { size: 11 }, boxWidth: 10 } },
+        tooltip: {
+          ...CD.plugins.tooltip,
+          callbacks: { label: ctx => ` ${ctx.dataset.label}: $${ctx.raw.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0})}` }
+        }
+      },
+      scales: {
+        x: CD.scales.x,
+        y: { ...CD.scales.y, ticks: { ...CD.scales.y.ticks, callback: v => '$' + (v/1000).toFixed(0) + 'K' } }
+      }
+    }
+  });
+}
+
+function sortLeaderboard(col) {
+  if (currentSortCol === col) {
+    currentSortAsc = !currentSortAsc;
+  } else {
+    currentSortCol = col;
+    currentSortAsc = false;
+  }
+  sortAndPopulateLeaderboard();
+}
+
+function sortAndPopulateLeaderboard() {
+  const tbody = document.getElementById('leaderboardBody');
+  tbody.innerHTML = '';
+  
+  const sorted = Object.keys(MULTI_STRATEGY_SUMMARY).map(key => ({
+    key: key,
+    ...MULTI_STRATEGY_SUMMARY[key]
+  }));
+  
+  sorted.sort((a, b) => {
+    let valA = a[currentSortCol];
+    let valB = b[currentSortCol];
+    if (typeof valA === 'string') {
+      return currentSortAsc ? valA.localeCompare(valB) : valB.localeCompare(valA);
+    } else {
+      return currentSortAsc ? valA - valB : valB - valA;
+    }
+  });
+  
+  sorted.forEach(s => {
+    let rowColor = '';
+    if (s.beat_bh === 'Yes') {
+      rowColor = 'background: rgba(16,185,129,0.03)';
+    }
+    
+    let badgeColorClass = 'pill-gray';
+    if (s.type === 'Benchmark') badgeColorClass = 'pill-gray';
+    else if (s.type === 'Leveraged') badgeColorClass = 'pill-yellow';
+    else if (s.type === 'Options') badgeColorClass = 'pill-green';
+    else if (s.type === 'RL Agent') badgeColorClass = 'pill-purple';
+    
+    tbody.innerHTML += `
+      <tr style="border-bottom:1px solid var(--border);padding:10px;${rowColor}">
+        <td style="padding:12px 10px;font-weight:600">${s.key}</td>
+        <td style="padding:12px 10px;font-weight:500;color:var(--text)">${s.name.split(':')[1] ? s.name.split(':')[1].trim() : s.name}</td>
+        <td style="padding:12px 10px"><span class="signal-pill ${badgeColorClass}" style="padding:2px 8px;font-size:10px">${s.type}</span></td>
+        <td style="padding:12px 10px;font-family:'JetBrains Mono',monospace;font-weight:700;color:${s.return_pct >= 0 ? 'var(--green)':'var(--red)'}">${s.return_pct >= 0 ? '+':''}${s.return_pct.toFixed(1)}%</td>
+        <td style="padding:12px 10px;font-family:'JetBrains Mono',monospace;color:var(--text2)">${s.sharpe.toFixed(3)}</td>
+        <td style="padding:12px 10px;font-family:'JetBrains Mono',monospace;color:${s.max_dd <= -50 ? 'var(--red)':'var(--text2)'}">${s.max_dd.toFixed(1)}%</td>
+        <td style="padding:12px 10px;font-weight:700;color:${s.beat_bh === 'Yes' ? 'var(--green)':'var(--text3)'}">${s.beat_bh === 'Yes' ? '🟢 YES' : '⚪ NO'}</td>
+      </tr>
+    `;
+  });
+}
+
+// ── Earnings countdown ─────────────────────────────────────────────────────────
+const earningsDate = new Date('2026-06-24');
+const today = new Date();
+const daysLeft = Math.ceil((earningsDate - today) / (1000 * 60 * 60 * 24));
+document.getElementById('earningsDays').textContent = daysLeft > 0 ? daysLeft : 'NOW';
+if (daysLeft <= 7) {
+  document.getElementById('earningsDays').style.color = 'var(--red)';
+}
+
+// ── SAMPLE_DATA fallback for file:// protocol ─────────────────────────────────
+// (small subset so the page doesn't break when opened directly)
+const SAMPLE_DATA = Array.from({length: 50}, (_, i) => ({
+  Date: new Date(Date.now() - (50-i)*24*3600*1000).toISOString().slice(0,10),
+  close: 900 + Math.sin(i/5)*80 + i*0.5,
+  volume: 30e6 + Math.random()*20e6,
+  rv_30d: 90 + Math.random()*30,
+  rv_90d: 80 + Math.random()*20,
+  rsi: 45 + Math.sin(i/3)*25,
+  above_50sma: i > 15 ? 1 : 0,
+  above_200sma: 1,
+  golden_cross: 0,
+  high_vol_regime: 1,
+  earnings_month: i > 40 ? 1 : 0,
+  earnings_lastweek: 0,
+  iv_premium: -80,
+}));
+
+// ── Load signal data ──────────────────────────────────────────────────────────
+// Embedded from results/mu_signals.json (generated by mu_options_analysis.py)
+try {
+  if (typeof REAL_DATA !== 'undefined' && REAL_DATA.length > 0) {
+    console.log('Using embedded REAL_DATA');
+    init(REAL_DATA);
+  } else {
+    throw new Error('REAL_DATA not defined');
+  }
+} catch (e) {
+  fetch('results/mu_signals.json')
+    .then(r => r.json())
+    .then(init)
+    .catch(() => {
+      console.warn('Fetching JSON failed. Using embedded sample.');
+      init(SAMPLE_DATA);
+    });
+}
+</script>
+</body>
+</html>

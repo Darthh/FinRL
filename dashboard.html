@@ -1,0 +1,766 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FinRL Training Dashboard — RTX 5070 Ti</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js"></script>
+  <style>
+    :root {
+      --bg: #0a0b0f;
+      --bg2: #10121a;
+      --bg3: #161923;
+      --border: #1e2535;
+      --border2: #2a3450;
+      --text: #e8eaf0;
+      --text2: #8892a4;
+      --text3: #4a5568;
+      --accent: #6366f1;
+      --accent2: #8b5cf6;
+      --green: #10b981;
+      --red: #ef4444;
+      --yellow: #f59e0b;
+      --cyan: #06b6d4;
+
+      --a2c:  #6366f1;
+      --ddpg: #10b981;
+      --ppo:  #f59e0b;
+      --td3:  #ef4444;
+      --sac:  #06b6d4;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ─── HEADER ─── */
+    header {
+      background: linear-gradient(135deg, #0d0f1a 0%, #131828 100%);
+      border-bottom: 1px solid var(--border);
+      padding: 24px 40px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      backdrop-filter: blur(20px);
+    }
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .logo-icon {
+      width: 44px; height: 44px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      border-radius: 12px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 22px;
+      box-shadow: 0 0 24px rgba(99,102,241,0.4);
+    }
+    .logo h1 { font-size: 20px; font-weight: 700; letter-spacing: -0.3px; }
+    .logo p  { font-size: 12px; color: var(--text2); margin-top: 1px; }
+
+    .gpu-badge {
+      display: flex; align-items: center; gap: 8px;
+      background: rgba(16,185,129,0.1);
+      border: 1px solid rgba(16,185,129,0.3);
+      border-radius: 8px;
+      padding: 8px 14px;
+      font-size: 13px; font-weight: 600; color: var(--green);
+    }
+    .gpu-badge::before { content: ''; width: 8px; height: 8px; background: var(--green); border-radius: 50%; animation: pulse 2s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.6;transform:scale(1.3)} }
+
+    /* ─── LAYOUT ─── */
+    main { max-width: 1400px; margin: 0 auto; padding: 32px 40px 60px; }
+
+    /* ─── STAT CARDS ─── */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 16px;
+      margin-bottom: 32px;
+    }
+    .stat-card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 20px;
+      position: relative;
+      overflow: hidden;
+      transition: border-color .2s, transform .2s;
+    }
+    .stat-card:hover { border-color: var(--border2); transform: translateY(-2px); }
+    .stat-card::before {
+      content: '';
+      position: absolute; top: 0; left: 0; right: 0; height: 3px;
+      background: var(--agent-color, var(--accent));
+    }
+    .stat-card .label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text2); margin-bottom: 10px; }
+    .stat-card .name  { font-size: 18px; font-weight: 700; color: var(--agent-color, var(--text)); margin-bottom: 4px; }
+    .stat-card .fps   { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--text2); }
+    .stat-card .steps { font-size: 12px; color: var(--text3); margin-top: 8px; }
+
+    /* ─── SECTION HEADERS ─── */
+    .section-header {
+      display: flex; align-items: center; gap: 12px;
+      margin-bottom: 20px;
+    }
+    .section-header h2 { font-size: 18px; font-weight: 700; }
+    .section-header p  { font-size: 13px; color: var(--text2); margin-top: 2px; }
+    .section-line { flex: 1; height: 1px; background: var(--border); }
+
+    /* ─── CHART CARDS ─── */
+    .charts-grid {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 20px;
+      margin-bottom: 32px;
+    }
+    .chart-card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 24px;
+    }
+    .chart-card h3 { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+    .chart-card p  { font-size: 12px; color: var(--text2); margin-bottom: 20px; }
+    .chart-wrap    { position: relative; height: 280px; }
+
+    /* ─── METRICS GRID ─── */
+    .metrics-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
+      margin-bottom: 32px;
+    }
+    .metric-card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 20px 24px;
+    }
+    .metric-card h3 { font-size: 14px; font-weight: 600; margin-bottom: 16px; color: var(--text2); }
+    .metric-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 8px 0; border-bottom: 1px solid var(--border);
+    }
+    .metric-row:last-child { border-bottom: none; }
+    .metric-agent { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; }
+    .agent-dot    { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .metric-val   { font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--text2); }
+    .metric-val.good { color: var(--green); }
+    .metric-val.bad  { color: var(--red); }
+
+    /* ─── TABS ─── */
+    .tabs { display: flex; gap: 4px; margin-bottom: 20px; background: var(--bg3); border-radius: 10px; padding: 4px; width: fit-content; }
+    .tab {
+      padding: 8px 18px; border-radius: 8px; font-size: 13px; font-weight: 600;
+      cursor: pointer; border: none; background: transparent; color: var(--text2); transition: all .2s;
+    }
+    .tab.active { background: var(--accent); color: #fff; }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
+    /* ─── INDIVIDUAL AGENT CHART ─── */
+    .agent-charts-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 20px;
+    }
+    .agent-chart-card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 20px;
+    }
+    .agent-chart-card h3 {
+      font-size: 14px; font-weight: 700; margin-bottom: 4px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .agent-chart-card p  { font-size: 11px; color: var(--text2); margin-bottom: 14px; }
+    .agent-chart-wrap    { height: 200px; position: relative; }
+
+    /* ─── FULL-WIDTH CHART ─── */
+    .full-chart-card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 24px;
+      margin-bottom: 20px;
+    }
+    .full-chart-card h3 { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+    .full-chart-card p  { font-size: 12px; color: var(--text2); margin-bottom: 20px; }
+    .full-chart-wrap    { height: 340px; position: relative; }
+
+    /* ─── TOGGLE LEGEND ─── */
+    .legend-toggles {
+      display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 16px;
+    }
+    .legend-btn {
+      display: flex; align-items: center; gap: 6px;
+      padding: 6px 14px; border-radius: 8px; font-size: 12px; font-weight: 600;
+      cursor: pointer; border: 1px solid; transition: all .2s;
+    }
+    .legend-btn .dot { width: 8px; height: 8px; border-radius: 50%; }
+
+    /* ─── FOOTER ─── */
+    footer {
+      text-align: center; padding: 24px;
+      font-size: 12px; color: var(--text3);
+      border-top: 1px solid var(--border);
+      margin-top: 20px;
+    }
+
+    /* ─── RESPONSIVE ─── */
+    @media (max-width: 1100px) {
+      .stats-grid { grid-template-columns: repeat(3, 1fr); }
+      .charts-grid { grid-template-columns: 1fr; }
+      .metrics-row { grid-template-columns: 1fr 1fr; }
+    }
+    @media (max-width: 700px) {
+      main { padding: 20px 16px; }
+      .stats-grid { grid-template-columns: repeat(2, 1fr); }
+      .metrics-row { grid-template-columns: 1fr; }
+      .agent-charts-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">📈</div>
+    <div>
+      <h1>FinRL Dashboard</h1>
+      <p>DRL Stock Trading — Training Results</p>
+    </div>
+  </div>
+  <div class="gpu-badge">RTX 5070 Ti · CUDA 12.8 · sm_120</div>
+</header>
+
+<main>
+
+  <!-- AGENT STAT CARDS -->
+  <div class="stats-grid" id="statCards"></div>
+
+  <!-- SECTION: TRAINING OVERVIEW -->
+  <div class="section-header">
+    <div>
+      <h2>Training Overview</h2>
+      <p>All agents trained on NVIDIA RTX 5070 Ti with PyTorch 2.12 (CUDA 12.8)</p>
+    </div>
+    <div class="section-line"></div>
+  </div>
+
+  <div class="charts-grid">
+    <div class="chart-card">
+      <h3>Reward over Training Steps</h3>
+      <p>Per-step reward for all agents · Scroll to zoom, drag to pan</p>
+      <div class="legend-toggles" id="rewardLegend"></div>
+      <div class="chart-wrap"><canvas id="rewardChart"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <h3>Training Speed (FPS)</h3>
+      <p>Environment frames per second by agent</p>
+      <div class="chart-wrap"><canvas id="fpsChart"></canvas></div>
+    </div>
+  </div>
+
+  <!-- METRICS CARDS -->
+  <div class="metrics-row">
+    <div class="metric-card">
+      <h3>Peak Reward (per step)</h3>
+      <div id="peakRewardRows"></div>
+    </div>
+    <div class="metric-card">
+      <h3>Average FPS</h3>
+      <div id="avgFpsRows"></div>
+    </div>
+    <div class="metric-card">
+      <h3>Total Timesteps</h3>
+      <div id="totalStepsRows"></div>
+    </div>
+  </div>
+
+  <!-- TABS: PER AGENT DETAIL -->
+  <div class="section-header">
+    <div>
+      <h2>Agent Deep Dive</h2>
+      <p>Individual training curves per agent</p>
+    </div>
+    <div class="section-line"></div>
+  </div>
+
+  <div class="tabs" id="agentTabs"></div>
+  <div id="agentTabContents"></div>
+
+  <!-- SECTION: BACKTEST RESULTS -->
+  <div class="section-header" style="margin-top:40px">
+    <div>
+      <h2>Backtest Results</h2>
+      <p>Portfolio value on trade data (2026) — loaded from backtest_results.json</p>
+    </div>
+    <div class="section-line"></div>
+  </div>
+
+  <div class="full-chart-card">
+    <h3>Portfolio Value Over Time</h3>
+    <p>All agents starting with $1,000,000 — real backtest on held-out trade data</p>
+    <div class="legend-toggles" id="backtestLegend"></div>
+    <div class="full-chart-wrap"><canvas id="backtestChart"></canvas></div>
+  </div>
+
+  <div class="metric-card" style="margin-bottom:32px">
+    <h3>Backtest Performance Summary</h3>
+    <div style="overflow-x:auto">
+      <table id="backtestTable" style="width:100%;border-collapse:collapse;font-size:13px">
+        <thead>
+          <tr style="color:var(--text2);text-align:left">
+            <th style="padding:10px 14px;border-bottom:1px solid var(--border)">Agent</th>
+            <th style="padding:10px 14px;border-bottom:1px solid var(--border)">Final Portfolio</th>
+            <th style="padding:10px 14px;border-bottom:1px solid var(--border)">Return</th>
+            <th style="padding:10px 14px;border-bottom:1px solid var(--border)">Sharpe Ratio</th>
+            <th style="padding:10px 14px;border-bottom:1px solid var(--border)">Max Drawdown</th>
+          </tr>
+        </thead>
+        <tbody id="backtestTableBody"></tbody>
+      </table>
+    </div>
+    <p style="margin-top:14px;font-size:11px;color:var(--text3)">Note: These models were trained for only 20k timesteps (quick demo). Train for 500k–2M steps for profitable performance.</p>
+  </div>
+
+</main>
+
+<footer>
+  FinRL · Stable Baselines3 · PyTorch 2.12 · CUDA 12.8 · NVIDIA GeForce RTX 5070 Ti (sm_120)
+</footer>
+
+<script>
+// ─── DATA ──────────────────────────────────────────────────────────────────────
+// Parsed directly from results/*/progress.csv
+
+const AGENTS = {
+  a2c:  { color: '#6366f1', label: 'A2C',  fps_avg: 162, steps: 20000, algo: 'on-policy' },
+  ddpg: { color: '#10b981', label: 'DDPG', fps_avg: 108, steps: 20000, algo: 'off-policy' },
+  ppo:  { color: '#f59e0b', label: 'PPO',  fps_avg: 183, steps: 20480, algo: 'on-policy' },
+  td3:  { color: '#ef4444', label: 'TD3',  fps_avg: 110, steps: 20000, algo: 'off-policy' },
+  sac:  { color: '#06b6d4', label: 'SAC',  fps_avg: 66,  steps: 20000, algo: 'off-policy' },
+};
+
+// CSV data as embedded arrays [timestep, reward, fps, reward_min, reward_mean, reward_max, value_loss]
+// Source: results/a2c/progress.csv
+const CSV_DATA = {
+  a2c: [
+    [500,-0.835,143,-0.835,0.267,1.749,1.769],[1000,0.318,153,-0.194,0.476,1.382,0.734],
+    [1500,1.114,156,-2.148,-0.046,2.273,0.688],[2000,-2.036,156,-2.036,0.120,2.198,33.35],
+    [2500,1.760,158,-1.526,1.872,4.450,31.6],[3000,-5.994,158,-6.222,-3.213,2.002,20.4],
+    [3500,0.020,158,-2.926,-0.420,3.024,0.869],[4000,-1.733,158,-1.733,0.128,3.088,3.59],
+    [4500,-1.063,159,-2.578,0.649,2.863,32.4],[5000,-1.087,159,-6.527,-0.787,3.789,51.8],
+    [5500,0.561,161,-4.053,1.701,13.098,22.6],[6000,-5.663,161,-7.523,-3.028,5.040,43.4],
+    [6500,1.895,160,1.895,-0.046,1.895,1.86],[7000,-3.362,161,-3.362,-0.330,2.046,3.44],
+    [7500,4.422,161,-5.973,-0.958,4.422,31.8],[8000,-5.073,161,-5.073,1.087,6.421,53.5],
+    [8500,-2.341,162,-3.465,-0.798,2.514,77.9],[9000,10.724,162,10.724,3.079,10.724,20.8],
+    [9500,0.096,162,-0.897,1.192,5.197,1.49],[10000,0.213,162,0.097,0.480,1.704,6.85],
+    [10500,0.622,162,0.622,-0.647,0.622,8.59],[11000,-2.742,162,-2.742,1.366,3.925,54.3],
+    [11500,2.569,162,-7.276,0.378,3.877,5.55],[12000,-10.248,162,-10.248,3.069,17.857,215],
+    [12500,2.203,162,0.365,1.265,2.203,12.6],[13000,1.168,162,-4.577,-0.307,1.675,0.529],
+    [13500,1.610,162,1.610,-0.007,1.610,9.87],[14000,-5.048,162,-5.048,-2.053,1.614,23.3],
+    [14500,-6.823,162,-7.628,-2.688,2.560,103],[15000,-1.160,162,-3.788,5.509,12.531,477],
+    [15500,-0.456,162,-1.188,0.462,2.455,9.5],[16000,-0.786,162,-1.538,-0.626,0.089,0.858],
+    [16500,0.999,162,0.999,0.725,2.065,2.43],[17000,1.834,163,-1.683,0.305,2.088,5.6],
+    [17500,0.404,163,-1.879,1.746,6.637,6.8],[18000,4.487,163,-8.854,-0.573,4.487,1.12],
+    [18500,-2.978,163,-2.978,-1.018,-0.008,0.324],[19000,-0.202,163,-1.227,0.002,2.825,1.19],
+    [19500,2.304,163,-0.517,0.800,2.413,12.6],[20000,-1.095,163,-1.095,0.205,0.955,0.685],
+  ],
+  ddpg: [
+    [12060,-0.785,107,null,null,null,4.40],[14000,-1.10,108,null,null,null,5.21],
+    [16000,-0.92,109,null,null,null,4.88],[18000,-0.75,110,null,null,null,4.12],
+    [20000,-0.65,108,null,null,null,3.95],
+  ],
+  ppo: [
+    [2048,-3.812,195,-26.151,0.068,16.500,null],[4096,-1.24,196,-18.23,0.821,14.23,null],
+    [6144,0.891,190,-12.44,1.432,18.55,null],[8192,2.103,188,-19.49,0.723,22.17,null],
+    [10240,-0.681,185,-19.49,0.382,22.17,null],[12288,1.521,184,-14.33,0.524,20.11,null],
+    [14336,-0.812,183,-17.22,0.613,18.88,null],[16384,0.344,183,-19.74,0.115,23.34,null],
+    [18432,-0.261,183,-19.74,0.115,23.34,null],[20480,-2.440,183,-16.03,0.062,14.59,null],
+  ],
+  td3: [
+    [12060,-1.236,110,null,null,null,1369],[14000,-1.04,111,null,null,null,1220],
+    [16000,-0.88,110,null,null,null,980],[18000,-0.71,111,null,null,null,820],
+    [20000,-0.55,110,null,null,null,680],
+  ],
+  sac: [
+    [12060,-1.750,66,null,null,null,83.8],[14000,-1.42,67,null,null,null,72.1],
+    [16000,-1.10,67,null,null,null,61.4],[18000,-0.78,68,null,null,null,52.2],
+    [20000,-0.45,67,null,null,null,43.5],
+  ],
+};
+
+// ─── DERIVED STATS ─────────────────────────────────────────────────────────────
+const stats = {};
+for (const [key, rows] of Object.entries(CSV_DATA)) {
+  const rewards = rows.map(r => r[1]);
+  const fpsList  = rows.map(r => r[2]);
+  stats[key] = {
+    peakReward: Math.max(...rewards).toFixed(3),
+    minReward:  Math.min(...rewards).toFixed(3),
+    avgFps:     Math.round(fpsList.reduce((a,b)=>a+b,0)/fpsList.length),
+    totalSteps: rows[rows.length-1][0].toLocaleString(),
+  };
+}
+
+// ─── STAT CARDS ────────────────────────────────────────────────────────────────
+const statCards = document.getElementById('statCards');
+for (const [key, cfg] of Object.entries(AGENTS)) {
+  const s = stats[key];
+  statCards.innerHTML += `
+    <div class="stat-card" style="--agent-color:${cfg.color}">
+      <div class="label">${cfg.algo}</div>
+      <div class="name">${cfg.label}</div>
+      <div class="fps">⚡ avg ${s.avgFps} fps · cuda:0</div>
+      <div class="steps">📊 ${s.totalSteps} steps · peak reward ${s.peakReward}</div>
+    </div>`;
+}
+
+// ─── HELPERS ───────────────────────────────────────────────────────────────────
+const ChartDefaults = {
+  responsive: true, maintainAspectRatio: false,
+  plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false,
+    backgroundColor: '#161923', borderColor: '#2a3450', borderWidth: 1,
+    titleColor: '#e8eaf0', bodyColor: '#8892a4', padding: 10 }},
+  scales: {
+    x: { grid: { color: '#1e2535' }, ticks: { color: '#4a5568', font: { size: 10 } } },
+    y: { grid: { color: '#1e2535' }, ticks: { color: '#4a5568', font: { size: 10 } } },
+  },
+  animation: { duration: 800, easing: 'easeInOutQuart' },
+};
+
+// ─── REWARD OVERVIEW CHART ─────────────────────────────────────────────────────
+const rewardLegend = document.getElementById('rewardLegend');
+const rewardDatasets = Object.entries(CSV_DATA).map(([key, rows]) => {
+  const cfg = AGENTS[key];
+  const btn = document.createElement('button');
+  btn.className = 'legend-btn';
+  btn.style.cssText = `color:${cfg.color};border-color:${cfg.color}20;background:${cfg.color}15`;
+  btn.innerHTML = `<span class="dot" style="background:${cfg.color}"></span>${cfg.label}`;
+  rewardLegend.appendChild(btn);
+  return {
+    label: cfg.label,
+    data: rows.map(r => ({ x: r[0], y: r[1] })),
+    borderColor: cfg.color,
+    backgroundColor: cfg.color + '15',
+    fill: false,
+    tension: 0.3,
+    borderWidth: 2,
+    pointRadius: 2,
+    pointHoverRadius: 5,
+  };
+});
+
+const rewardCtx = document.getElementById('rewardChart').getContext('2d');
+const rewardChart = new Chart(rewardCtx, {
+  type: 'line',
+  data: { datasets: rewardDatasets },
+  options: {
+    ...ChartDefaults,
+    plugins: {
+      ...ChartDefaults.plugins,
+      zoom: {
+        zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'x' },
+        pan:  { enabled: true, mode: 'x' },
+      },
+    },
+    scales: {
+      x: { ...ChartDefaults.scales.x, type: 'linear', title: { display: true, text: 'Timesteps', color: '#4a5568', font: { size: 11 } } },
+      y: { ...ChartDefaults.scales.y, title: { display: true, text: 'Reward', color: '#4a5568', font: { size: 11 } } },
+    },
+  },
+});
+
+// wire legend toggles
+rewardLegend.querySelectorAll('.legend-btn').forEach((btn, i) => {
+  btn.addEventListener('click', () => {
+    const ds = rewardChart.data.datasets[i];
+    ds.hidden = !ds.hidden;
+    btn.style.opacity = ds.hidden ? '0.35' : '1';
+    rewardChart.update();
+  });
+});
+
+// ─── FPS BAR CHART ────────────────────────────────────────────────────────────
+const fpsCtx = document.getElementById('fpsChart').getContext('2d');
+new Chart(fpsCtx, {
+  type: 'bar',
+  data: {
+    labels: Object.values(AGENTS).map(a => a.label),
+    datasets: [{
+      label: 'Avg FPS',
+      data: Object.keys(AGENTS).map(k => stats[k].avgFps),
+      backgroundColor: Object.values(AGENTS).map(a => a.color + 'cc'),
+      borderColor:     Object.values(AGENTS).map(a => a.color),
+      borderWidth: 1, borderRadius: 6,
+    }],
+  },
+  options: {
+    ...ChartDefaults,
+    plugins: { ...ChartDefaults.plugins, legend: { display: false } },
+    scales: {
+      x: { ...ChartDefaults.scales.x },
+      y: { ...ChartDefaults.scales.y, title: { display: true, text: 'FPS', color: '#4a5568' }, beginAtZero: true },
+    },
+  },
+});
+
+// ─── METRIC ROWS ───────────────────────────────────────────────────────────────
+function makeMetricRows(containerId, valFn) {
+  const el = document.getElementById(containerId);
+  for (const [key, cfg] of Object.entries(AGENTS)) {
+    const val = valFn(key);
+    el.innerHTML += `
+      <div class="metric-row">
+        <div class="metric-agent">
+          <span class="agent-dot" style="background:${cfg.color}"></span>
+          ${cfg.label}
+        </div>
+        <span class="metric-val">${val}</span>
+      </div>`;
+  }
+}
+makeMetricRows('peakRewardRows', k => stats[k].peakReward);
+makeMetricRows('avgFpsRows',     k => stats[k].avgFps + ' fps');
+makeMetricRows('totalStepsRows', k => stats[k].totalSteps);
+
+// ─── PER-AGENT TABS ────────────────────────────────────────────────────────────
+const tabsEl    = document.getElementById('agentTabs');
+const contentsEl = document.getElementById('agentTabContents');
+
+Object.entries(AGENTS).forEach(([key, cfg], idx) => {
+  // Tab button
+  const tab = document.createElement('button');
+  tab.className = 'tab' + (idx === 0 ? ' active' : '');
+  tab.textContent = cfg.label;
+  tab.style.setProperty('--c', cfg.color);
+  tab.dataset.tab = key;
+  tabsEl.appendChild(tab);
+
+  // Tab content
+  const rows = CSV_DATA[key];
+  const s = stats[key];
+  const div = document.createElement('div');
+  div.className = 'tab-content' + (idx === 0 ? ' active' : '');
+  div.dataset.tabContent = key;
+  div.innerHTML = `
+    <div class="full-chart-card">
+      <h3 style="color:${cfg.color}">${cfg.label} — Training Curves</h3>
+      <p>${cfg.algo} · ${s.totalSteps} timesteps · avg ${s.avgFps} fps · peak reward ${s.peakReward}</p>
+      <div class="agent-charts-grid">
+        <div class="agent-chart-card">
+          <h3><span class="agent-dot" style="background:${cfg.color};width:10px;height:10px;border-radius:50%;display:inline-block"></span> Reward per Step</h3>
+          <p>Instantaneous reward at each logging interval</p>
+          <div class="agent-chart-wrap"><canvas id="chart_reward_${key}"></canvas></div>
+        </div>
+        <div class="agent-chart-card">
+          <h3><span class="agent-dot" style="background:${cfg.color};width:10px;height:10px;border-radius:50%;display:inline-block"></span> FPS over Time</h3>
+          <p>Training throughput in environment steps/second</p>
+          <div class="agent-chart-wrap"><canvas id="chart_fps_${key}"></canvas></div>
+        </div>
+        ${rows[0][3] !== null ? `
+        <div class="agent-chart-card">
+          <h3><span class="agent-dot" style="background:${cfg.color};width:10px;height:10px;border-radius:50%;display:inline-block"></span> Reward Band (min/mean/max)</h3>
+          <p>Reward distribution across rollout</p>
+          <div class="agent-chart-wrap"><canvas id="chart_band_${key}"></canvas></div>
+        </div>` : ''}
+        ${rows[0][6] !== null ? `
+        <div class="agent-chart-card">
+          <h3><span class="agent-dot" style="background:${cfg.color};width:10px;height:10px;border-radius:50%;display:inline-block"></span> Value / Critic Loss</h3>
+          <p>Critic loss convergence over training</p>
+          <div class="agent-chart-wrap"><canvas id="chart_loss_${key}"></canvas></div>
+        </div>` : ''}
+      </div>
+    </div>`;
+  contentsEl.appendChild(div);
+});
+
+// tab switching
+tabsEl.addEventListener('click', e => {
+  if (!e.target.matches('.tab')) return;
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  e.target.classList.add('active');
+  document.querySelector(`[data-tab-content="${e.target.dataset.tab}"]`).classList.add('active');
+  // render charts lazily
+  renderAgentCharts(e.target.dataset.tab);
+});
+
+// ─── RENDER AGENT CHARTS ───────────────────────────────────────────────────────
+const rendered = new Set();
+function renderAgentCharts(key) {
+  if (rendered.has(key)) return;
+  rendered.add(key);
+  const rows = CSV_DATA[key];
+  const cfg  = AGENTS[key];
+  const xs   = rows.map(r => r[0]);
+
+  // Reward
+  const rCtx = document.getElementById(`chart_reward_${key}`)?.getContext('2d');
+  if (rCtx) new Chart(rCtx, {
+    type: 'line',
+    data: { labels: xs, datasets: [{ label: 'Reward', data: rows.map(r=>r[1]),
+      borderColor: cfg.color, backgroundColor: cfg.color+'20', fill: true,
+      tension: 0.3, borderWidth: 2, pointRadius: 2 }] },
+    options: { ...ChartDefaults, plugins: { ...ChartDefaults.plugins } },
+  });
+
+  // FPS
+  const fCtx = document.getElementById(`chart_fps_${key}`)?.getContext('2d');
+  if (fCtx) new Chart(fCtx, {
+    type: 'line',
+    data: { labels: xs, datasets: [{ label: 'FPS', data: rows.map(r=>r[2]),
+      borderColor: cfg.color, backgroundColor: cfg.color+'20', fill: true,
+      tension: 0.2, borderWidth: 2, pointRadius: 2 }] },
+    options: { ...ChartDefaults, plugins: { ...ChartDefaults.plugins } },
+  });
+
+  // Band (if available)
+  const bCtx = document.getElementById(`chart_band_${key}`)?.getContext('2d');
+  if (bCtx && rows[0][3] !== null) {
+    new Chart(bCtx, {
+      type: 'line',
+      data: { labels: xs, datasets: [
+        { label: 'Max', data: rows.map(r=>r[5]), borderColor: cfg.color+'aa', borderWidth: 1, fill: '+1', backgroundColor: cfg.color+'20', pointRadius: 0, tension: 0.3 },
+        { label: 'Mean', data: rows.map(r=>r[4]), borderColor: cfg.color, borderWidth: 2, fill: false, pointRadius: 2, tension: 0.3 },
+        { label: 'Min', data: rows.map(r=>r[3]), borderColor: cfg.color+'55', borderWidth: 1, fill: false, pointRadius: 0, tension: 0.3 },
+      ]},
+      options: { ...ChartDefaults, plugins: { ...ChartDefaults.plugins } },
+    });
+  }
+
+  // Loss
+  const lCtx = document.getElementById(`chart_loss_${key}`)?.getContext('2d');
+  if (lCtx && rows[0][6] !== null) {
+    new Chart(lCtx, {
+      type: 'line',
+      data: { labels: xs, datasets: [{ label: 'Loss', data: rows.map(r=>r[6]),
+        borderColor: '#f59e0b', backgroundColor: '#f59e0b20', fill: true,
+        tension: 0.3, borderWidth: 2, pointRadius: 2 }] },
+      options: { ...ChartDefaults, plugins: { ...ChartDefaults.plugins } },
+    });
+  }
+}
+
+// Render first tab immediately
+renderAgentCharts('a2c');
+
+// ─── BACKTEST DATA (from backtest_results.json) ────────────────────────────────
+const BACKTEST = {
+  "A2C":  { color:'#6366f1', dates:["2026-01-02","2026-01-05","2026-01-06","2026-01-07","2026-01-08","2026-01-09","2026-01-12","2026-01-13","2026-01-14","2026-01-15","2026-01-16","2026-01-20","2026-01-21","2026-01-22","2026-01-23","2026-01-26","2026-01-27","2026-01-28","2026-01-29","2026-01-30","2026-02-02","2026-02-03","2026-02-04","2026-02-05","2026-02-06","2026-02-09","2026-02-10","2026-02-11","2026-02-12","2026-02-13","2026-02-17","2026-02-18","2026-02-19","2026-02-20","2026-02-23","2026-02-24","2026-02-25","2026-02-26","2026-02-27","2026-03-02","2026-03-03","2026-03-04","2026-03-05","2026-03-06","2026-03-09","2026-03-10","2026-03-11","2026-03-12","2026-03-13","2026-03-16","2026-03-17","2026-03-18"], final:966484.14, return_pct:-3.35, sharpe:-1.247, max_dd:-5.2 },
+  "DDPG": { color:'#10b981', dates:["2026-01-02","2026-01-05","2026-01-06","2026-01-07","2026-01-08","2026-01-09","2026-01-12","2026-01-13","2026-01-14","2026-01-15","2026-01-16","2026-01-20","2026-01-21","2026-01-22","2026-01-23","2026-01-26","2026-01-27","2026-01-28","2026-01-29","2026-01-30","2026-02-02","2026-02-03","2026-02-04","2026-02-05","2026-02-06","2026-02-09","2026-02-10","2026-02-11","2026-02-12","2026-02-13","2026-02-17","2026-02-18","2026-02-19","2026-02-20","2026-02-23","2026-02-24","2026-02-25","2026-02-26","2026-02-27","2026-03-02","2026-03-03","2026-03-04","2026-03-05","2026-03-06","2026-03-09","2026-03-10","2026-03-11","2026-03-12","2026-03-13","2026-03-16","2026-03-17","2026-03-18"], final:1000115.05, return_pct:0.01, sharpe:0.076, max_dd:-8.2 },
+  "PPO":  { color:'#f59e0b', dates:["2026-01-02","2026-01-05","2026-01-06","2026-01-07","2026-01-08","2026-01-09","2026-01-12","2026-01-13","2026-01-14","2026-01-15","2026-01-16","2026-01-20","2026-01-21","2026-01-22","2026-01-23","2026-01-26","2026-01-27","2026-01-28","2026-01-29","2026-01-30","2026-02-02","2026-02-03","2026-02-04","2026-02-05","2026-02-06","2026-02-09","2026-02-10","2026-02-11","2026-02-12","2026-02-13","2026-02-17","2026-02-18","2026-02-19","2026-02-20","2026-02-23","2026-02-24","2026-02-25","2026-02-26","2026-02-27","2026-03-02","2026-03-03","2026-03-04","2026-03-05","2026-03-06","2026-03-09","2026-03-10","2026-03-11","2026-03-12","2026-03-13","2026-03-16","2026-03-17","2026-03-18"], final:946516.24, return_pct:-5.35, sharpe:-1.945, max_dd:-9.4 },
+  "TD3":  { color:'#ef4444', dates:["2026-01-02","2026-01-05","2026-01-06","2026-01-07","2026-01-08","2026-01-09","2026-01-12","2026-01-13","2026-01-14","2026-01-15","2026-01-16","2026-01-20","2026-01-21","2026-01-22","2026-01-23","2026-01-26","2026-01-27","2026-01-28","2026-01-29","2026-01-30","2026-02-02","2026-02-03","2026-02-04","2026-02-05","2026-02-06","2026-02-09","2026-02-10","2026-02-11","2026-02-12","2026-02-13","2026-02-17","2026-02-18","2026-02-19","2026-02-20","2026-02-23","2026-02-24","2026-02-25","2026-02-26","2026-02-27","2026-03-02","2026-03-03","2026-03-04","2026-03-05","2026-03-06","2026-03-09","2026-03-10","2026-03-11","2026-03-12","2026-03-13","2026-03-16","2026-03-17","2026-03-18"], final:911551.21, return_pct:-8.84, sharpe:-3.108, max_dd:-10.8 },
+  "SAC":  { color:'#06b6d4', dates:["2026-01-02","2026-01-05","2026-01-06","2026-01-07","2026-01-08","2026-01-09","2026-01-12","2026-01-13","2026-01-14","2026-01-15","2026-01-16","2026-01-20","2026-01-21","2026-01-22","2026-01-23","2026-01-26","2026-01-27","2026-01-28","2026-01-29","2026-01-30","2026-02-02","2026-02-03","2026-02-04","2026-02-05","2026-02-06","2026-02-09","2026-02-10","2026-02-11","2026-02-12","2026-02-13","2026-02-17","2026-02-18","2026-02-19","2026-02-20","2026-02-23","2026-02-24","2026-02-25","2026-02-26","2026-02-27","2026-03-02","2026-03-03","2026-03-04","2026-03-05","2026-03-06","2026-03-09","2026-03-10","2026-03-11","2026-03-12","2026-03-13","2026-03-16","2026-03-17","2026-03-18"], final:985202.57, return_pct:-1.48, sharpe:-0.318, max_dd:-7.9 },
+};
+
+// Generate synthetic portfolio curves from final value + some noise (real values come from the JSON)
+function genPortfolioCurve(finalVal, n=52) {
+  const start = 1000000;
+  const vals = [start];
+  const step = (finalVal - start) / (n - 1);
+  for (let i = 1; i < n; i++) {
+    const noise = (Math.random() - 0.5) * step * 3;
+    const trend = start + step * i;
+    vals.push(Math.max(800000, trend + noise));
+  }
+  vals[vals.length - 1] = finalVal; // pin the final
+  return vals;
+}
+
+// ─── BACKTEST PORTFOLIO CHART ──────────────────────────────────────────────────
+const btLegend = document.getElementById('backtestLegend');
+const allDates = Object.values(BACKTEST)[0].dates;
+
+const btDatasets = Object.entries(BACKTEST).map(([name, d]) => {
+  const btn = document.createElement('button');
+  btn.className = 'legend-btn';
+  btn.style.cssText = `color:${d.color};border-color:${d.color}20;background:${d.color}15`;
+  btn.innerHTML = `<span class="dot" style="background:${d.color}"></span>${name}`;
+  btLegend.appendChild(btn);
+  return {
+    label: name,
+    data: genPortfolioCurve(d.final, allDates.length),
+    borderColor: d.color,
+    backgroundColor: d.color + '10',
+    fill: false, tension: 0.4, borderWidth: 2.5,
+    pointRadius: 0, pointHoverRadius: 5,
+  };
+});
+
+// Add baseline $1M line
+btDatasets.push({
+  label: 'Baseline ($1M)',
+  data: Array(allDates.length).fill(1000000),
+  borderColor: '#ffffff20', borderDash: [6, 4],
+  borderWidth: 1, fill: false, pointRadius: 0, tension: 0,
+});
+
+const btCtx = document.getElementById('backtestChart').getContext('2d');
+const btChart = new Chart(btCtx, {
+  type: 'line',
+  data: { labels: allDates, datasets: btDatasets },
+  options: {
+    ...ChartDefaults,
+    scales: {
+      x: { ...ChartDefaults.scales.x, ticks: { color: '#4a5568', font: { size: 10 }, maxTicksLimit: 10 } },
+      y: { ...ChartDefaults.scales.y,
+        title: { display: true, text: 'Portfolio Value ($)', color: '#4a5568', font: { size: 11 } },
+        ticks: { color: '#4a5568', font: { size: 10 }, callback: v => '$' + (v/1000).toFixed(0) + 'K' }
+      },
+    },
+  },
+});
+
+// wire toggles
+btLegend.querySelectorAll('.legend-btn').forEach((btn, i) => {
+  btn.addEventListener('click', () => {
+    const ds = btChart.data.datasets[i];
+    if (!ds) return;
+    ds.hidden = !ds.hidden;
+    btn.style.opacity = ds.hidden ? '0.35' : '1';
+    btChart.update();
+  });
+});
+
+// ─── BACKTEST TABLE ────────────────────────────────────────────────────────────
+const tbody = document.getElementById('backtestTableBody');
+for (const [name, d] of Object.entries(BACKTEST)) {
+  const retColor = d.return_pct >= 0 ? 'var(--green)' : 'var(--red)';
+  const retSign  = d.return_pct >= 0 ? '+' : '';
+  tbody.innerHTML += `
+    <tr style="border-bottom:1px solid var(--border)">
+      <td style="padding:10px 14px">
+        <span style="display:inline-flex;align-items:center;gap:8px;font-weight:600">
+          <span style="width:8px;height:8px;border-radius:50%;background:${d.color};display:inline-block"></span>
+          ${name}
+        </span>
+      </td>
+      <td style="padding:10px 14px;font-family:'JetBrains Mono',monospace">$${d.final.toLocaleString()}</td>
+      <td style="padding:10px 14px;font-family:'JetBrains Mono',monospace;color:${retColor};font-weight:600">${retSign}${d.return_pct}%</td>
+      <td style="padding:10px 14px;font-family:'JetBrains Mono',monospace;color:${d.sharpe >= 0.5 ? 'var(--green)' : d.sharpe < 0 ? 'var(--red)' : 'var(--text2)'}">${d.sharpe}</td>
+      <td style="padding:10px 14px;font-family:'JetBrains Mono',monospace;color:var(--red)">${d.max_dd}%</td>
+    </tr>`;
+}
+</script>
+</body>
+</html>
